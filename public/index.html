@@ -496,7 +496,7 @@
       document.getElementById('txt-offline').innerText = dict.offline;
     }
 
-    // --- Web Speech API (Voice-to-Text) ---
+    // --- Web Speech API (Voice-to-Text) with Enhanced Accuracy ---
     function toggleVoiceInput() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
@@ -510,10 +510,17 @@
 
       if (!recognitionInstance) {
         recognitionInstance = new SpeechRecognition();
-        recognitionInstance.interimResults = false;
+        
+        // Settings for higher accuracy and stream-like speech experience
+        recognitionInstance.continuous = true;
+        recognitionInstance.interimResults = true;
+        recognitionInstance.maxAlternatives = 1;
+
+        let finalTranscript = '';
 
         recognitionInstance.onstart = () => {
           isRecordingVoice = true;
+          finalTranscript = descInput.value; // Start with current text
           voiceBtn.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-600 border border-red-300 animate-pulse";
           voiceText.innerText = i18n[currentLang].recording;
         };
@@ -524,15 +531,23 @@
           voiceText.innerText = i18n[currentLang].recordVoice;
         };
 
-        recognitionInstance.onerror = () => {
+        recognitionInstance.onerror = (event) => {
+          console.error("Speech Recognition Error: ", event.error);
           isRecordingVoice = false;
           voiceBtn.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100 transition";
           voiceText.innerText = i18n[currentLang].recordVoice;
         };
 
         recognitionInstance.onresult = (event) => {
-          const text = event.results[0][0].transcript;
-          descInput.value = descInput.value ? `${descInput.value} ${text}` : text;
+          let interimTranscript = '';
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              finalTranscript += (finalTranscript ? ' ' : '') + event.results[i][0].transcript;
+            } else {
+              interimTranscript += event.results[i][0].transcript;
+            }
+          }
+          descInput.value = finalTranscript + (interimTranscript ? ' ' + interimTranscript : '');
         };
       }
 
