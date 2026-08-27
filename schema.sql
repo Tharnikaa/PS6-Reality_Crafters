@@ -55,8 +55,19 @@ CREATE TABLE IF NOT EXISTS civic_reports (
   -- TRUE if the location string contains a major-road keyword
   -- (salai, bypass, highway, main road, expressway, arterial).
   -- This is road-TYPE classification, NOT real-time traffic.
-  high_traffic_area BOOLEAN DEFAULT FALSE
+  high_traffic_area BOOLEAN DEFAULT FALSE,
+
+  -- Master issue reference & mathematical priority explanations
+  master_issue_id   TEXT,
+  priority          TEXT DEFAULT 'Medium Priority',
+  priority_reason   TEXT,
+  priority_factors  JSONB
 );
+
+ALTER TABLE civic_reports ADD COLUMN IF NOT EXISTS master_issue_id TEXT;
+ALTER TABLE civic_reports ADD COLUMN IF NOT EXISTS priority TEXT DEFAULT 'Medium Priority';
+ALTER TABLE civic_reports ADD COLUMN IF NOT EXISTS priority_reason TEXT;
+ALTER TABLE civic_reports ADD COLUMN IF NOT EXISTS priority_factors JSONB;
 
 -- ── ALTER TABLE — add priority columns if running on an ──────
 -- existing database that was created before this update.

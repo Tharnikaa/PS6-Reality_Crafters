@@ -45,6 +45,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ── Constants & Configuration ──────────────────────────────
+const DUPLICATE_RADIUS_METERS = 100;
+
 // ============================================================
 // IN-MEMORY FALLBACK DATA
 // Used only when Supabase is not configured (local dev).
@@ -71,9 +74,12 @@ const knownFacilities = [
 //          frontend JavaScript expects.
 // ============================================================
 function formatReportRow(row) {
+  if (!row) return null;
   return {
     id:               row.id,
     issue_id:         row.issue_id || null,
+    masterIssueId:    row.master_issue_id || row.masterIssueId || null,
+    master_issue_id:  row.master_issue_id || row.masterIssueId || null,
     category:         row.category,
     department:       row.department,
     description:      row.description,
@@ -82,21 +88,27 @@ function formatReportRow(row) {
     lng:              row.lng,
     status:           row.status,
     severity:         row.severity,
-    duplicatesCount:  row.duplicates_count || 1,
-    imageUrl:         row.image_url,
+    duplicatesCount:  row.duplicates_count || row.duplicatesCount || 1,
+    duplicates_count: row.duplicates_count || row.duplicatesCount || 1,
+    imageUrl:         row.image_url || row.imageUrl,
     timestamp:        row.timestamp
                         ? new Date(row.timestamp).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
                         : 'Recently',
-    reporterPhone:    row.reporter_phone,
+    reporterPhone:    row.reporter_phone || row.reporterPhone,
     device_id:        row.device_id || row.deviceId,
     timestamp_ms:     row.timestamp_ms || (row.timestamp && !isNaN(new Date(row.timestamp).getTime()) ? new Date(row.timestamp).getTime() : Date.now()),
-    // Priority fields — returned to the frontend for display
-    priority:           row.priority          || (row.priority_level ? `${row.priority_level} Priority` : 'Medium Priority'),
-    priority_score:     row.priority_score    || 0,
-    priority_level:     row.priority_level    || 'LOW',
-    nearby_facility:    row.nearby_facility   || false,
-    facility_type:      row.facility_type     || null,
-    facility_name:      row.facility_name     || null,
+    priority:           row.priority || (row.priority_level ? `${row.priority_level} Priority` : 'Medium Priority'),
+    priorityScore:      row.priority_score || row.priorityScore || 0,
+    priority_score:     row.priority_score || row.priorityScore || 0,
+    priorityLevel:      row.priority_level || 'LOW',
+    priority_level:     row.priority_level || 'LOW',
+    priorityReason:     row.priority_reason || row.priorityReason || '',
+    priority_reason:    row.priority_reason || row.priorityReason || '',
+    priorityFactors:    row.priority_factors || row.priorityFactors || {},
+    priority_factors:   row.priority_factors || row.priorityFactors || {},
+    nearby_facility:    row.nearby_facility || false,
+    facility_type:      row.facility_type || null,
+    facility_name:      row.facility_name || null,
     facility_distance:  row.facility_distance || null,
     high_traffic_area:  row.high_traffic_area || false,
     zoneInfo:           row.zone_info || row.zoneInfo || {},
@@ -365,56 +377,160 @@ function findNearbyFacility(lat, lng) {
 //   It is simple, requires no external API, and is accurate
 //   enough for a prototype. Most Chennai main roads contain
 //   the word "salai" (Tamil for "road/avenue") in their name.
-//
-// Weight: 20% of the final priority score.
-//
-// Parameters:
-//   location — address string from the report
-//
-// Returns:
-//   true  — high traffic (major road)
-//   false — normal traffic (local or residential road)
 // ============================================================
-function isHighTrafficArea(location) {
-  const locLower = (location || '').toLowerCase();
+// MATHEMATICAL DYNAMIC PRIORITY ENGINE & DUPLICATE HELPERS
+// ============================================================
+
+/**
+ * Calculates distance in meters between two GPS coordinates using Haversine formula
+ */
+function calculateDistanceMeters(lat1, lng1, lat2, lng2) {
+  return calculateDistance(lat1, lng1, lat2, lng2);
+}
+
+/**
+ * Calculates Report Count Score based on duplicatesCount
+ * 1 report -> 0
+ * 2-3 reports -> +1
+ * 4-5 reports -> +2
+ * 6+ reports -> +3
+ */
+function calculateReportCountScore(duplicatesCount) {
+  const count = parseInt(duplicatesCount) || 1;
+  if (count <= 1) return 0;
+  if (count <= 3) return 1;
+  if (count <= 5) return 2;
+  return 3;
+}
+
+/**
+ * Calculates Location Score based on proximity to Hospitals (+3) or Schools (+2)
+ */
+function calculateLocationScore(location = '', zoneType = '', zoneSensitivity = '') {
+  const combined = `${location} ${zoneType}`.toLowerCase();
+  if (combined.includes('hospital') || combined.includes('clinic') || combined.includes('healthcare') || zoneSensitivity === 'Critical') {
+    return 3;
+  }
+  if (combined.includes('school') || combined.includes('college') || combined.includes('vidyalaya') || zoneSensitivity === 'High') {
+    return 2;
+  }
+  return 0;
+}
+
+/**
+ * Determines traffic level from location text
+ */
+function getTrafficLevel(location = '') {
+  const locLower = String(location || '').toLowerCase();
   const highTrafficKeywords = [
-    'salai', 'bypass', 'highway', 'main rd', 'main road', 'expressway', 'arterial'
+    'junction', 'signal', 'intersection', 'main road', 'highway', 'bus stand',
+    'market', 'railway station', 'salai', 'expressway', 'bypass', 'arterial'
   ];
-  return highTrafficKeywords.some(keyword => locLower.includes(keyword));
-}
-
-// ============================================================
-// STEP 9 — PRIORITY SCORE FORMULA
-// ============================================================
-// Combines three weighted factors into one final score (0–100).
-//
-//   priorityScore = (reportScore × 0.50)
-//                + (facilityScore × 0.30)
-//                + (trafficScore  × 0.20)
-//
-// Parameters:
-//   reportScore   — 0–100, based on how many citizens reported
-//   facilityScore — 100 if school/hospital nearby, else 0
-//   trafficScore  — 100 if high-traffic road, else 0
-//
-// Returns:
-//   integer 0–100
-// ============================================================
-function calculatePriority(reportScore, facilityScore, trafficScore) {
-  const score = (reportScore * 0.50) + (facilityScore * 0.30) + (trafficScore * 0.20);
-  return Math.round(score);
-}
-
-// ============================================================
-// STEP 10 — PRIORITY LEVEL
-// ============================================================
-// Maps the numeric score to a human-readable priority label.
-// ============================================================
-function getPriorityLevel(score) {
-  if (score >= 80) return 'CRITICAL';
-  if (score >= 60) return 'HIGH';
-  if (score >= 30) return 'MEDIUM';
+  if (highTrafficKeywords.some(kw => locLower.includes(kw))) {
+    return 'HIGH';
+  }
+  if (locLower.includes('road') || locLower.includes('street') || locLower.includes('avenue') || locLower.includes('cross')) {
+    return 'MEDIUM';
+  }
   return 'LOW';
+}
+
+/**
+ * Calculates Traffic Score based on traffic level
+ * HIGH -> +2, MEDIUM -> +1, LOW -> +0
+ */
+function calculateTrafficScore(trafficLevel) {
+  if (trafficLevel === 'HIGH') return 2;
+  if (trafficLevel === 'MEDIUM') return 1;
+  return 0;
+}
+
+/**
+ * Main Mathematical Priority Function
+ * Calculates final priority level, score, factors, and human-readable reason
+ */
+function calculateFinalPriority({
+  severity = 3,
+  duplicatesCount = 1,
+  zoneType = '',
+  zoneSensitivity = '',
+  location = ''
+}) {
+  const severityScore = Math.max(1, Math.min(5, parseInt(severity) || 3));
+  const reportCountScore = calculateReportCountScore(duplicatesCount);
+  const locationScore = calculateLocationScore(location, zoneType, zoneSensitivity);
+  const trafficLevel = getTrafficLevel(location);
+  const trafficScore = calculateTrafficScore(trafficLevel);
+
+  const totalScore = severityScore + reportCountScore + locationScore + trafficScore;
+
+  let priority = "Medium Priority";
+  if (totalScore >= 10 || severityScore >= 5 || zoneSensitivity === 'Critical') {
+    priority = "Critical Priority";
+  } else if (totalScore >= 7) {
+    priority = "High Priority";
+  } else if (totalScore >= 4) {
+    priority = "Medium Priority";
+  } else {
+    priority = "Low Priority";
+  }
+
+  // Generate clear human-readable reason
+  const reasons = [];
+  if (duplicatesCount > 1) {
+    reasons.push(`${duplicatesCount} citizens reported the same issue`);
+  } else {
+    reasons.push(`Single citizen report received`);
+  }
+
+  if (locationScore === 3) {
+    reasons.push(`near a hospital/healthcare route`);
+  } else if (locationScore === 2) {
+    reasons.push(`near a school/educational zone`);
+  }
+
+  if (trafficScore === 2) {
+    reasons.push(`in a high-traffic arterial area`);
+  } else if (trafficScore === 1) {
+    reasons.push(`in a medium-density corridor`);
+  }
+
+  const priorityReason = reasons.join(' ') + '.';
+
+  return {
+    priority,
+    priorityScore: totalScore,
+    priorityReason,
+    factors: {
+      severityScore,
+      reportCountScore,
+      locationScore,
+      trafficScore
+    }
+  };
+}
+
+/**
+ * Finds an existing open master report matching exact category within 100 meters
+ */
+function findDuplicateReport(newReport, existingReports) {
+  if (!newReport || !existingReports || !Array.isArray(existingReports)) return null;
+
+  for (const report of existingReports) {
+    if (report.id === newReport.id) continue;
+    if (report.status === 'Resolved' || report.status === 'RESOLVED') continue;
+    if (report.category !== newReport.category) continue;
+
+    const dist = calculateDistanceMeters(
+      parseFloat(newReport.lat), parseFloat(newReport.lng),
+      parseFloat(report.lat), parseFloat(report.lng)
+    );
+
+    if (dist <= DUPLICATE_RADIUS_METERS) {
+      return report;
+    }
+  }
+  return null;
 }
 
 // ============================================================
@@ -843,21 +959,9 @@ app.post('/api/reports', authenticateToken, upload.single('image'), async (req, 
     fallbackReports.unshift(formatReportRow(initialReport));
   }
 
-  // ── 5–16. TRIAGE PIPELINE ────────────────────────────────
-  // All of this runs AFTER the report is safely saved.
-  // Any error here is caught and logged; the report already exists.
-
-  let duplicateCount = 1;
-  let facilityResult = { found: false, type: null, name: null, distance: null };
-  let isTraffic      = false;
-  let priorityScore  = 0;
-  let priorityLevel  = 'LOW';
-  let severity       = 2;
-  let issueId        = null;
-  let issueLoc       = { lat: newLat, lng: newLng };
-
+  // ── 5–16. TRIAGE PIPELINE & DUPLICATE DETECTOR ─────────────
   try {
-    // ── 5. Fetch existing open reports of the same category ──
+    // 1. Fetch existing open reports of the SAME CATEGORY
     let existingReports = [];
     if (supabase) {
       const { data, error } = await supabase
@@ -874,172 +978,163 @@ app.post('/api/reports', authenticateToken, upload.single('image'), async (req, 
       );
     }
 
-    // ── 6. Check for existing matching issue within 100 metres ──
-    let matchedIssueId = findMatchingIssue(
+    // 2. Check for duplicate report within 100m radius
+    const matchedDuplicate = findDuplicateReport(
       { id: reportId, category, lat: newLat, lng: newLng },
       existingReports
     );
 
-    // If an unresolved matching issue exists within 100m, reuse its issue_id.
-    // Otherwise, generate a brand new unique issue_id.
-    issueId = matchedIssueId || generateIssueId();
-    initialReport.issue_id = issueId;
+    const zoneInfo = (aiTriage && aiTriage.zoneInfo) ? aiTriage.zoneInfo : {};
 
-    // ── 7. Find all duplicate reports belonging to this issue cluster ─
-    const duplicateReports = findDuplicateReports(
-      { id: reportId, category, lat: newLat, lng: newLng },
-      existingReports
-    );
+    if (matchedDuplicate) {
+      // ── DUPLICATE DETECTED — MERGE INTO MASTER ISSUE ───────
+      const masterId = matchedDuplicate.master_issue_id || matchedDuplicate.masterIssueId || matchedDuplicate.id;
+      let masterReport = existingReports.find(r => r.id === masterId) || matchedDuplicate;
 
-    const allClusterReports = [
-      ...duplicateReports,
-      { id: reportId, category, lat: newLat, lng: newLng }
-    ];
+      const currentMasterCount = parseInt(masterReport.duplicates_count || masterReport.duplicatesCount) || 1;
+      const newMasterCount = currentMasterCount + 1;
 
-    duplicateCount = allClusterReports.length;
+      // Recalculate priority dynamically for the master issue with updated count
+      const masterPriorityResult = calculateFinalPriority({
+        severity: masterReport.severity || (aiTriage ? aiTriage.severity : 3),
+        duplicatesCount: newMasterCount,
+        zoneType: zoneInfo.zoneType || masterReport.zoneInfo?.zoneType || '',
+        zoneSensitivity: zoneInfo.zoneSensitivity || masterReport.zoneInfo?.zoneSensitivity || '',
+        location: masterReport.location || reportLoc
+      });
 
-    // Calculate representative location (average lat/lng of cluster)
-    issueLoc = calculateIssueLocation(allClusterReports);
+      // Update the new duplicate child submission
+      const childPayload = {
+        master_issue_id:   masterId,
+        issue_id:          masterId,
+        duplicates_count:  1,
+        priority:          masterPriorityResult.priority,
+        priority_score:    masterPriorityResult.priorityScore,
+        priority_level:    masterPriorityResult.priority.startsWith('Critical') ? 'CRITICAL' : (masterPriorityResult.priority.startsWith('High') ? 'HIGH' : 'MEDIUM'),
+        priority_reason:   masterPriorityResult.priorityReason,
+        priority_factors:  masterPriorityResult.factors
+      };
 
-    // ── 8. Nearby school or hospital? ───────────────────────
-    facilityResult = findNearbyFacility(newLat, newLng);
+      // Update Master Issue with increased count & updated priority
+      const masterUpdatePayload = {
+        duplicates_count:  newMasterCount,
+        priority:          masterPriorityResult.priority,
+        priority_score:    masterPriorityResult.priorityScore,
+        priority_level:    masterPriorityResult.priority.startsWith('Critical') ? 'CRITICAL' : (masterPriorityResult.priority.startsWith('High') ? 'HIGH' : 'MEDIUM'),
+        priority_reason:   masterPriorityResult.priorityReason,
+        priority_factors:  masterPriorityResult.factors
+      };
 
-    // ── 9. High-traffic road? ────────────────────────────────
-    isTraffic = isHighTrafficArea(reportLoc);
-
-    // ── 10–13. Calculate scores ──────────────────────────────
-    const reportScore   = calculateReportScore(duplicateCount);
-    const facilityScore = facilityResult.found ? 100 : 0;
-    const trafficScore  = isTraffic ? 100 : 0;
-
-    priorityScore = calculatePriority(reportScore, facilityScore, trafficScore);
-    priorityLevel = getPriorityLevel(priorityScore);
-    severity      = mapPriorityToSeverity(priorityLevel);
-
-    // ── Incorporate AI Triage (Visual & Zone Sensitivity Escalation) ──
-    if (aiTriage && aiTriage.severity && aiTriage.severity > severity) {
-      severity = aiTriage.severity;
-      if (severity >= 5) priorityLevel = 'CRITICAL';
-      else if (severity === 4) priorityLevel = 'HIGH';
-      else if (severity === 3) priorityLevel = 'MEDIUM';
-      priorityScore = Math.max(priorityScore, severity * 18);
-    }
-
-    // ── 14. Update the new report with issue_id and calculated fields ─
-    const updatePayload = {
-      issue_id:          issueId,
-      duplicates_count:  duplicateCount,
-      priority_score:    priorityScore,
-      priority_level:    priorityLevel,
-      severity,
-      nearby_facility:   facilityResult.found,
-      facility_type:     facilityResult.type,
-      facility_name:     facilityResult.name,
-      facility_distance: facilityResult.distance,
-      high_traffic_area: isTraffic
-    };
-
-    if (supabase) {
-      try {
-        await supabase
-          .from('civic_reports')
-          .update(updatePayload)
-          .eq('id', reportId);
-      } catch (updErr) {
-        delete updatePayload.issue_id;
-        await supabase.from('civic_reports').update(updatePayload).eq('id', reportId);
-      }
-
-      // ── 15. Update ALL duplicate reports in the cluster ────
-      for (const dup of duplicateReports) {
+      if (supabase) {
         try {
-          await supabase
-            .from('civic_reports')
-            .update({
-              issue_id:         issueId,
-              duplicates_count: duplicateCount,
-              priority_score:   priorityScore,
-              priority_level:   priorityLevel,
-              severity
-            })
-            .eq('id', dup.id);
-        } catch (dupUpdErr) {
-          await supabase
-            .from('civic_reports')
-            .update({
-              duplicates_count: duplicateCount,
-              priority_score:   priorityScore,
-              priority_level:   priorityLevel,
-              severity
-            })
-            .eq('id', dup.id);
+          await supabase.from('civic_reports').update(childPayload).eq('id', reportId);
+          await supabase.from('civic_reports').update(masterUpdatePayload).eq('id', masterId);
+        } catch (dbErr) {
+          console.warn('[DUPLICATE MERGE] DB update warning:', dbErr.message);
+        }
+      } else {
+        // In-memory fallback
+        const childInMem = fallbackReports.find(r => r.id === reportId);
+        if (childInMem) {
+          childInMem.master_issue_id = masterId;
+          childInMem.masterIssueId   = masterId;
+          childInMem.issue_id        = masterId;
+        }
+        const masterInMem = fallbackReports.find(r => r.id === masterId);
+        if (masterInMem) {
+          masterInMem.duplicates_count = newMasterCount;
+          masterInMem.duplicatesCount  = newMasterCount;
+          masterInMem.priority         = masterPriorityResult.priority;
+          masterInMem.priority_score   = masterPriorityResult.priorityScore;
+          masterInMem.priorityScore    = masterPriorityResult.priorityScore;
+          masterInMem.priority_reason  = masterPriorityResult.priorityReason;
+          masterInMem.priorityReason   = masterPriorityResult.priorityReason;
+          masterInMem.priority_factors = masterPriorityResult.factors;
+          masterInMem.priorityFactors  = masterPriorityResult.factors;
         }
       }
-    } else {
-      // In-memory fallback update
-      for (const r of fallbackReports) {
-        const isNew = r.id === reportId;
-        const isDup = duplicateReports.some(d => d.id === r.id);
 
-        if (isNew || isDup) {
-          r.issue_id         = issueId;
-          r.duplicatesCount  = duplicateCount;
-          r.severity         = severity;
-          r.priority_score   = priorityScore;
-          r.priority_level   = priorityLevel;
+      const updatedMasterRow = {
+        ...masterReport,
+        duplicates_count: newMasterCount,
+        duplicatesCount:  newMasterCount,
+        priority:         masterPriorityResult.priority,
+        priority_score:   masterPriorityResult.priorityScore,
+        priorityScore:    masterPriorityResult.priorityScore,
+        priority_reason:  masterPriorityResult.priorityReason,
+        priorityReason:   masterPriorityResult.priorityReason,
+        priority_factors: masterPriorityResult.factors,
+        priorityFactors:  masterPriorityResult.factors
+      };
+
+      return res.status(200).json({
+        success: true,
+        isDuplicate: true,
+        mergedInto: masterId,
+        report: formatReportRow(updatedMasterRow)
+      });
+
+    } else {
+      // ── NEW MASTER ISSUE CREATED ───────────────────────────
+      const initialSeverity = (aiTriage && aiTriage.severity) ? aiTriage.severity : 3;
+
+      const priorityResult = calculateFinalPriority({
+        severity: initialSeverity,
+        duplicatesCount: 1,
+        zoneType: zoneInfo.zoneType || '',
+        zoneSensitivity: zoneInfo.zoneSensitivity || '',
+        location: reportLoc
+      });
+
+      const masterUpdatePayload = {
+        master_issue_id:   null,
+        issue_id:          initialReport.id,
+        duplicates_count:  1,
+        priority:          priorityResult.priority,
+        priority_score:    priorityResult.priorityScore,
+        priority_level:    priorityResult.priority.startsWith('Critical') ? 'CRITICAL' : (priorityResult.priority.startsWith('High') ? 'HIGH' : 'MEDIUM'),
+        priority_reason:   priorityResult.priorityReason,
+        priority_factors:  priorityResult.factors,
+        severity:          initialSeverity
+      };
+
+      if (supabase) {
+        try {
+          await supabase.from('civic_reports').update(masterUpdatePayload).eq('id', reportId);
+        } catch (dbErr) {
+          console.warn('[NEW MASTER] DB update warning:', dbErr.message);
         }
-        if (isNew) {
-          r.nearby_facility   = facilityResult.found;
-          r.facility_type     = facilityResult.type;
-          r.facility_name     = facilityResult.name;
-          r.facility_distance = facilityResult.distance;
-          r.high_traffic_area = isTraffic;
+      } else {
+        const inMem = fallbackReports.find(r => r.id === reportId);
+        if (inMem) {
+          inMem.master_issue_id = null;
+          inMem.duplicates_count = 1;
+          inMem.priority         = priorityResult.priority;
+          inMem.priority_score   = priorityResult.priorityScore;
+          inMem.priority_reason  = priorityResult.priorityReason;
+          inMem.priority_factors = priorityResult.factors;
         }
       }
+
+      const finalMasterReport = {
+        ...initialReport,
+        ...masterUpdatePayload
+      };
+
+      return res.status(201).json({
+        success: true,
+        isDuplicate: false,
+        report: formatReportRow(finalMasterReport)
+      });
     }
   } catch (err) {
-    console.error('Triage pipeline error (report already saved):', err.message);
+    console.error('Triage pipeline error:', err.message);
+    return res.status(201).json({
+      success: true,
+      isDuplicate: false,
+      report: formatReportRow(initialReport)
+    });
   }
-
-  // ── 16. Return enriched response with report AND issue representation ─
-  return res.status(201).json({
-    success: true,
-    spam: false,
-    deleted: false,
-    aiTriage: aiTriage,
-    report: {
-      ...formatReportRow(initialReport),
-      issue_id:          issueId,
-      category,
-      department,
-      priority:          (aiTriage && aiTriage.priority) ? aiTriage.priority : `${priorityLevel} Priority`,
-      duplicatesCount:   duplicateCount,
-      priority_score:    priorityScore,
-      priority_level:    priorityLevel,
-      nearby_facility:   facilityResult.found,
-      facility_type:     facilityResult.type,
-      facility_name:     facilityResult.name,
-      facility_distance: facilityResult.distance,
-      high_traffic_area: isTraffic,
-      severity:          (aiTriage && aiTriage.severity) ? aiTriage.severity : severity,
-      zoneInfo:          (aiTriage && aiTriage.zoneInfo) ? aiTriage.zoneInfo : {},
-      aiAnalysis:        (aiTriage && aiTriage.analysis) ? aiTriage.analysis : {}
-    },
-    issue: {
-      issue_id:          issueId,
-      category,
-      department,
-      report_count:      duplicateCount,
-      latitude:          issueLoc.lat,
-      longitude:         issueLoc.lng,
-      status:            'OPEN',
-      priority_score:    priorityScore,
-      priority_level:    priorityLevel,
-      severity,
-      nearby_facility:   facilityResult.found,
-      high_traffic_area: isTraffic
-    }
-  });
 });
 
 // ── PATCH /api/reports/:id/status ────────────────────────────
@@ -1530,12 +1625,16 @@ module.exports = {
   app,
   classifyReport,
   calculateDistance,
+  calculateDistanceMeters,
   calculateReportScore,
+  calculateReportCountScore,
+  calculateLocationScore,
+  getTrafficLevel,
+  calculateTrafficScore,
+  calculateFinalPriority,
   findNearbyFacility,
-  isHighTrafficArea,
-  calculatePriority,
-  getPriorityLevel,
-  mapPriorityToSeverity,
+  findDuplicateReport,
   findDuplicateReports,
-  enrichReportsWithClusters
+  enrichReportsWithClusters,
+  formatReportRow
 };

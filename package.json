@@ -7,7 +7,8 @@
     "test": "node tests/categorization.test.js",
     "test:spam": "node tests/spamDetection.test.js",
     "test:gate": "node tests/spamGate.test.js",
-    "test:multi": "node tests/multiLayerSpam.test.js"
+    "test:multi": "node tests/multiLayerSpam.test.js",
+    "test:duplicate": "node tests/duplicatePriority.test.js"
   },
   "keywords": [],
   "author": "",
