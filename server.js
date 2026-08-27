@@ -435,6 +435,10 @@ function getTrafficLevel(location = '') {
   return 'LOW';
 }
 
+function isHighTrafficArea(location = '') {
+  return getTrafficLevel(location) === 'HIGH';
+}
+
 /**
  * Calculates Traffic Score based on traffic level
  * HIGH -> +2, MEDIUM -> +1, LOW -> +0
