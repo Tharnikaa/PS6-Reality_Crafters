@@ -202,8 +202,8 @@ function findMatchingIssue(newReport, existingReports) {
       report.lat,    report.lng
     );
 
-    if (dist <= DUPLICATE_RADIUS_METRES && report.issue_id) {
-      return report.issue_id;
+    if (dist <= DUPLICATE_RADIUS_METRES) {
+      return report.issue_id || `ISSUE_${report.id}`;
     }
   }
   return null;
@@ -462,44 +462,129 @@ function classifyReport(description) {
 // ── GET /api/reports ─────────────────────────────────────────
 // Returns all reports, optionally filtered by department.
 // Used by the frontend to populate both the citizen view and
-// the admin queue.
-// ─────────────────────────────────────────────────────────────
+// ── Dynamic Clustering Helper ────────────────────────────────────
+function enrichReportsWithClusters(rawReports) {
+  if (!rawReports || rawReports.length === 0) return { enrichedReports: [], issueClusters: [] };
+
+  const clusters = [];
+  const reportsCopy = rawReports.map(r => ({ ...r }));
+
+  for (const r of reportsCopy) {
+    if (r.status === 'Resolved' || r.status === 'RESOLVED') {
+      clusters.push({
+        issue_id: r.issue_id || `ISSUE_${r.id}`,
+        category: r.category,
+        department: r.department,
+        reports: [r]
+      });
+      continue;
+    }
+
+    let matchedCluster = clusters.find(c => {
+      if (c.category !== r.category) return false;
+      const isOpenCluster = c.reports.some(existing => existing.status !== 'Resolved' && existing.status !== 'RESOLVED');
+      if (!isOpenCluster) return false;
+
+      return c.reports.some(existing => {
+        const dist = calculateDistance(r.lat, r.lng, existing.lat, existing.lng);
+        return dist <= 100;
+      });
+    });
+
+    if (matchedCluster) {
+      matchedCluster.reports.push(r);
+    } else {
+      clusters.push({
+        issue_id: r.issue_id || `ISSUE_${r.id}`,
+        category: r.category,
+        department: r.department,
+        reports: [r]
+      });
+    }
+  }
+
+  const issueClusters = clusters.map(c => {
+    const loc = calculateIssueLocation(c.reports);
+    const count = c.reports.length;
+    const rep = c.reports[0];
+    const reportScore = calculateReportScore(count);
+    const facilityResult = findNearbyFacility(loc.lat, loc.lng);
+    const isTraffic = isHighTrafficArea(rep.location || '');
+    const facilityScore = facilityResult.found ? 100 : 0;
+    const trafficScore = isTraffic ? 100 : 0;
+    let priorityScore = calculatePriority(reportScore, facilityScore, trafficScore);
+
+    c.reports.forEach(rItem => {
+      if (rItem.severity && rItem.severity >= 4) {
+        priorityScore = Math.max(priorityScore, rItem.severity * 18);
+      }
+    });
+
+    const priorityLevel = getPriorityLevel(priorityScore);
+    const severity = mapPriorityToSeverity(priorityLevel);
+
+    c.reports.forEach(rItem => {
+      rItem.issue_id = c.issue_id;
+      rItem.duplicates_count = count;
+      rItem.duplicatesCount = count;
+      rItem.priority_score = priorityScore;
+      rItem.priority_level = priorityLevel;
+      rItem.severity = Math.max(rItem.severity || 2, severity);
+    });
+
+    return {
+      issue_id: c.issue_id,
+      category: c.category,
+      department: c.department,
+      report_count: count,
+      latitude: loc.lat,
+      longitude: loc.lng,
+      location: rep.location,
+      status: c.reports.some(r => r.status !== 'Resolved' && r.status !== 'RESOLVED') ? 'OPEN' : 'RESOLVED',
+      priority_score: priorityScore,
+      priority_level: priorityLevel,
+      severity: severity,
+      nearby_facility: facilityResult.found,
+      high_traffic_area: isTraffic,
+      reports: c.reports.map(formatReportRow)
+    };
+  });
+
+  return { enrichedReports: reportsCopy, issueClusters };
+}
+
+// ── GET /api/reports ─────────────────────────────────────────
 app.get('/api/reports', async (req, res) => {
   const { department } = req.query;
+  let allData = [];
 
   if (supabase) {
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from('civic_reports')
         .select('*')
         .order('timestamp', { ascending: false });
 
-      if (department && department !== 'All') {
-        query = query.eq('department', department);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return res.json((data || []).map(formatReportRow));
+      if (!error) allData = data || [];
     } catch (err) {
       console.error('GET /api/reports Supabase error, using fallback:', err.message);
+      allData = fallbackReports;
     }
+  } else {
+    allData = fallbackReports;
   }
 
-  // In-memory fallback
-  let results = fallbackReports;
+  const { enrichedReports } = enrichReportsWithClusters(allData);
+  let results = enrichedReports;
   if (department && department !== 'All') {
-    results = fallbackReports.filter(r => r.department === department);
+    results = results.filter(r => r.department === department);
   }
-  res.json(results);
+  res.json(results.map(formatReportRow));
 });
 
 // ── GET /api/reports/prioritized ─────────────────────────────
-// Returns all open reports sorted by priority_score descending.
-// NOTE: This route must be registered BEFORE /api/reports/:id
-//       so Express does not mistake "prioritized" for an :id.
-// ─────────────────────────────────────────────────────────────
 app.get('/api/reports/prioritized', async (req, res) => {
+  let allData = [];
   if (supabase) {
     try {
       const { data, error } = await supabase
@@ -509,26 +594,23 @@ app.get('/api/reports/prioritized', async (req, res) => {
         .neq('status', 'RESOLVED')
         .order('priority_score', { ascending: false });
 
-      if (error) throw error;
-      return res.json({ success: true, reports: (data || []).map(formatReportRow) });
+      if (!error) allData = data || [];
     } catch (err) {
-      console.error('GET /api/reports/prioritized error, using fallback:', err.message);
+      allData = fallbackReports;
     }
+  } else {
+    allData = fallbackReports;
   }
 
-  const active = fallbackReports
+  const { enrichedReports } = enrichReportsWithClusters(allData);
+  const active = enrichedReports
     .filter(r => r.status !== 'Resolved' && r.status !== 'RESOLVED')
     .sort((a, b) => (b.priority_score || 0) - (a.priority_score || 0));
 
-  res.json({ success: true, reports: active });
+  res.json({ success: true, reports: active.map(formatReportRow) });
 });
 
 // ── GET /api/issues ───────────────────────────────────────────
-// Returns UNIQUE issue clusters (grouped by issue_id).
-// Does NOT return one item per report.
-// Includes representative common location (average lat/lng),
-// report_count, priority_score, priority_level, and list of reports.
-// ─────────────────────────────────────────────────────────────
 app.get('/api/issues', async (req, res) => {
   let allReports = [];
   if (supabase) {
@@ -545,46 +627,11 @@ app.get('/api/issues', async (req, res) => {
     allReports = fallbackReports;
   }
 
-  // Group reports by issue_id
-  const issuesMap = {};
-  for (const r of allReports) {
-    const issueId = r.issue_id || `ISSUE_${r.id}`;
-    if (!issuesMap[issueId]) {
-      issuesMap[issueId] = [];
-    }
-    issuesMap[issueId].push(r);
-  }
-
-  const issuesList = Object.keys(issuesMap).map(issueId => {
-    const reports = issuesMap[issueId];
-    const rep = reports[0];
-    const loc = calculateIssueLocation(reports);
-    const isOpen = reports.some(r => r.status !== 'Resolved' && r.status !== 'RESOLVED');
-
-    return {
-      issue_id:         issueId,
-      category:         rep.category,
-      department:       rep.department,
-      report_count:     reports.length,
-      latitude:         loc.lat,
-      longitude:        loc.lng,
-      location:         rep.location,
-      status:           isOpen ? 'OPEN' : 'RESOLVED',
-      priority_score:   rep.priority_score || 0,
-      priority_level:   rep.priority_level || 'LOW',
-      severity:         rep.severity || 2,
-      nearby_facility:  rep.nearby_facility || false,
-      high_traffic_area: rep.high_traffic_area || false,
-      reports:          reports.map(formatReportRow)
-    };
-  });
-
-  res.json({ success: true, issues: issuesList });
+  const { issueClusters } = enrichReportsWithClusters(allReports);
+  res.json({ success: true, issues: issueClusters });
 });
 
 // ── GET /api/issues/prioritized ─────────────────────────────
-// Returns active unique issue clusters ordered by priority_score descending.
-// ─────────────────────────────────────────────────────────────
 app.get('/api/issues/prioritized', async (req, res) => {
   let allReports = [];
   if (supabase) {
@@ -601,43 +648,11 @@ app.get('/api/issues/prioritized', async (req, res) => {
     allReports = fallbackReports;
   }
 
-  const issuesMap = {};
-  for (const r of allReports) {
-    const issueId = r.issue_id || `ISSUE_${r.id}`;
-    if (!issuesMap[issueId]) {
-      issuesMap[issueId] = [];
-    }
-    issuesMap[issueId].push(r);
-  }
+  const { issueClusters } = enrichReportsWithClusters(allReports);
+  const activeIssues = issueClusters
+    .filter(i => i.status === 'OPEN')
+    .sort((a, b) => b.priority_score - a.priority_score);
 
-  const activeIssues = [];
-  for (const issueId of Object.keys(issuesMap)) {
-    const reports = issuesMap[issueId];
-    const rep = reports[0];
-    const isOpen = reports.some(r => r.status !== 'Resolved' && r.status !== 'RESOLVED');
-
-    if (isOpen) {
-      const loc = calculateIssueLocation(reports);
-      activeIssues.push({
-        issue_id:         issueId,
-        category:         rep.category,
-        department:       rep.department,
-        report_count:     reports.length,
-        latitude:         loc.lat,
-        longitude:        loc.lng,
-        location:         rep.location,
-        status:           'OPEN',
-        priority_score:   rep.priority_score || 0,
-        priority_level:   rep.priority_level || 'LOW',
-        severity:         rep.severity || 2,
-        nearby_facility:  rep.nearby_facility || false,
-        high_traffic_area: rep.high_traffic_area || false,
-        reports:          reports.map(formatReportRow)
-      });
-    }
-  }
-
-  activeIssues.sort((a, b) => b.priority_score - a.priority_score);
   res.json({ success: true, issues: activeIssues });
 });
 
@@ -1174,7 +1189,84 @@ app.use((req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// ── Auto-cluster pre-existing database reports on startup ─────────
+async function autoClusterExistingReports() {
+  if (!supabase) return;
+  try {
+    const { data: allReports, error } = await supabase
+      .from('civic_reports')
+      .select('*')
+      .neq('status', 'Resolved')
+      .neq('status', 'RESOLVED');
+
+    if (error || !allReports) return;
+
+    for (let i = 0; i < allReports.length; i++) {
+      const repA = allReports[i];
+      const cluster = [repA];
+
+      for (let j = i + 1; j < allReports.length; j++) {
+        const repB = allReports[j];
+        if (repA.category === repB.category) {
+          const dist = calculateDistance(repA.lat, repA.lng, repB.lat, repB.lng);
+          if (dist <= 100) {
+            cluster.push(repB);
+          }
+        }
+      }
+
+      if (cluster.length > 1) {
+        const sharedIssueId = repA.issue_id || `ISSUE_${repA.id}`;
+        const count = cluster.length;
+        const reportScore = calculateReportScore(count);
+        const facilityResult = findNearbyFacility(repA.lat, repA.lng);
+        const isTraffic = isHighTrafficArea(repA.location);
+        const facilityScore = facilityResult.found ? 100 : 0;
+        const trafficScore = isTraffic ? 100 : 0;
+        const score = calculatePriority(reportScore, facilityScore, trafficScore);
+        const level = getPriorityLevel(score);
+        const sev = mapPriorityToSeverity(level);
+
+        for (const item of cluster) {
+          item.issue_id = sharedIssueId;
+          item.duplicates_count = count;
+          item.priority_score = score;
+          item.priority_level = level;
+          item.severity = sev;
+
+          try {
+            await supabase
+              .from('civic_reports')
+              .update({
+                issue_id: sharedIssueId,
+                duplicates_count: count,
+                priority_score: score,
+                priority_level: level,
+                severity: sev
+              })
+              .eq('id', item.id);
+          } catch (e) {
+            await supabase
+              .from('civic_reports')
+              .update({
+                duplicates_count: count,
+                priority_score: score,
+                priority_level: level,
+                severity: sev
+              })
+              .eq('id', item.id);
+          }
+        }
+      }
+    }
+    console.log('Existing database reports clustered successfully.');
+  } catch (err) {
+    console.warn('Auto-clustering warning:', err.message);
+  }
+}
+
 // ── Start server ──────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`CivicResolve server running on http://localhost:${PORT}`);
+  autoClusterExistingReports();
 });
