@@ -333,10 +333,109 @@
       }
     };
 
+    // --- IndexedDB for Offline Queue ---
+    const DB_NAME = 'CivicResolveOfflineDB';
+    const STORE_NAME = 'offline_reports';
+
+    function openOfflineDB() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, 1);
+        request.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.createObjectStore(STORE_NAME, { keyPath: 'offlineId', autoIncrement: true });
+          }
+        };
+        request.onsuccess = (e) => resolve(e.target.result);
+        request.onerror = (e) => reject(e.target.error);
+      });
+    }
+
+    async function queueOfflineReport(reportData) {
+      const db = await openOfflineDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(STORE_NAME, 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.add(reportData);
+        request.onsuccess = () => resolve();
+        request.onerror = (e) => reject(e.target.error);
+      });
+    }
+
+    async function getQueuedReports() {
+      const db = await openOfflineDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(STORE_NAME, 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.getAll();
+        request.onsuccess = (e) => resolve(e.target.result);
+        request.onerror = (e) => reject(e.target.error);
+      });
+    }
+
+    async function deleteQueuedReport(offlineId) {
+      const db = await openOfflineDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(STORE_NAME, 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.delete(offlineId);
+        request.onsuccess = () => resolve();
+        request.onerror = (e) => reject(e.target.error);
+      });
+    }
+
+    async function syncOfflineReports() {
+      if (!navigator.onLine) return;
+      const queued = await getQueuedReports();
+      if (queued.length === 0) return;
+
+      const banner = document.getElementById('offline-banner');
+      banner.classList.remove('hidden');
+      banner.className = "bg-indigo-600 text-white px-4 py-1 text-xs font-semibold text-center flex items-center justify-center gap-2 animate-pulse";
+      banner.innerHTML = `<i class="fa-solid fa-sync fa-spin"></i> Syncing ${queued.length} offline report(s)...`;
+
+      for (const report of queued) {
+        const formData = new FormData();
+        formData.append('description', report.description);
+        formData.append('location', report.location);
+        formData.append('lat', report.lat);
+        formData.append('lng', report.lng);
+        formData.append('reporterPhone', report.reporterPhone);
+
+        if (report.image) {
+          try {
+            const response = await fetch(report.image);
+            const blob = await response.blob();
+            formData.append('image', blob, 'offline-image.jpg');
+          } catch (err) {
+            console.error("Error recovering offline image blob:", err);
+          }
+        }
+
+        try {
+          const res = await fetch('/api/reports', {
+            method: 'POST',
+            body: formData
+          });
+          const data = await res.json();
+          if (data.success) {
+            await deleteQueuedReport(report.offlineId);
+          }
+        } catch (err) {
+          console.error("Failed syncing report:", err);
+        }
+      }
+
+      banner.classList.add('hidden');
+      await fetchReports();
+      renderCitizenReports();
+    }
+
     // --- Init App ---
     window.addEventListener('DOMContentLoaded', async () => {
       initGeolocation();
       initNetworkListeners();
+      await syncOfflineReports();
       await fetchReports();
       if (civicReports.length > 0) {
         selectedTicketId = civicReports[0].id;
@@ -474,7 +573,10 @@
     // --- Offline Network Monitor ---
     function initNetworkListeners() {
       const banner = document.getElementById('offline-banner');
-      window.addEventListener('online', () => banner.classList.add('hidden'));
+      window.addEventListener('online', () => {
+        banner.classList.add('hidden');
+        syncOfflineReports();
+      });
       window.addEventListener('offline', () => banner.classList.remove('hidden'));
     }
 
@@ -598,12 +700,77 @@
       document.getElementById('upload-placeholder').classList.remove('hidden');
     }
 
-    // --- Submit Civic Issue to Express Backend ---
+    // --- Submit Civic Issue to Express Backend with Offline Queue Fallback ---
     async function handleReportSubmit(e) {
       e.preventDefault();
       const desc = document.getElementById('report-desc').value;
       const fileInput = document.getElementById('report-img-file');
       const submitBtn = document.getElementById('submit-btn');
+
+      // Convert image file to Base64 helper
+      const getBase64 = (file) => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
+      });
+
+      // Prepare payload data
+      const reportPayload = {
+        description: desc,
+        location: currentCoords.text,
+        lat: currentCoords.lat,
+        lng: currentCoords.lng,
+        reporterPhone: userPhone || "+91 9876543210",
+        timestamp: new Date().toLocaleString()
+      };
+
+      // If offline, queue the report locally in IndexedDB
+      if (!navigator.onLine) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<i class="fa-solid fa-wifi-slash"></i> Offline. Queuing...`;
+
+        if (fileInput.files.length > 0) {
+          try {
+            reportPayload.image = await getBase64(fileInput.files[0]);
+          } catch (err) {
+            console.error("Error reading file for offline storage:", err);
+          }
+        }
+
+        try {
+          await queueOfflineReport(reportPayload);
+          alert("Connection offline. Your report has been queued locally and will submit automatically when you reconnect.");
+          
+          // Visual feedback in list
+          const isGarbage = desc.toLowerCase().includes('garbage') || desc.toLowerCase().includes('waste');
+          const isLight = desc.toLowerCase().includes('light') || desc.toLowerCase().includes('lamp');
+          
+          civicReports.unshift({
+            id: "PENDING-SYNC",
+            category: isGarbage ? "Garbage Overflow" : (isLight ? "Broken Streetlight" : "Pothole & Surface Damage"),
+            department: isGarbage ? "Solid Waste Management" : (isLight ? "Electrical Department" : "Highways & Roads"),
+            description: desc,
+            location: currentCoords.text,
+            status: "Pending",
+            duplicatesCount: 1,
+            severity: 3,
+            imageUrl: reportPayload.image || "https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=500&q=80",
+            timestamp: "Waiting to sync...",
+            reporterPhone: reportPayload.reporterPhone
+          });
+        } catch (err) {
+          console.error("Failed to queue report offline:", err);
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = `<i class="fa-solid fa-paper-plane text-sm"></i> <span>${i18n[currentLang].btnSubmit}</span>`;
+
+          document.getElementById('report-desc').value = '';
+          clearImage(e);
+          switchCitizenTab('my-reports');
+        }
+        return;
+      }
 
       submitBtn.disabled = true;
       submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> AI Triage & Routing...`;
