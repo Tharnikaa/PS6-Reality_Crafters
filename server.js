@@ -70,6 +70,7 @@ const knownFacilities = [
 function formatReportRow(row) {
   return {
     id:               row.id,
+    issue_id:         row.issue_id || null,
     category:         row.category,
     department:       row.department,
     description:      row.description,
@@ -169,6 +170,63 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 
   // Step 5 — Multiply by Earth's radius to get metres.
   return R * c;
+}
+
+// ============================================================
+// ISSUE CLUSTERING HELPERS (issue_id)
+// ============================================================
+
+let issueCounter = 100;
+/**
+ * Generates a unique issue identifier (e.g. ISSUE_101)
+ */
+function generateIssueId() {
+  issueCounter++;
+  return `ISSUE_${issueCounter}`;
+}
+
+/**
+ * Searches for an existing open issue cluster within 100 metres
+ * matching the same category and returns its issue_id.
+ * If none found or existing issue is RESOLVED, returns null.
+ */
+function findMatchingIssue(newReport, existingReports) {
+  const DUPLICATE_RADIUS_METRES = 100;
+  for (const report of existingReports) {
+    if (report.id === newReport.id) continue;
+    if (report.status === 'Resolved' || report.status === 'RESOLVED') continue;
+    if (report.category !== newReport.category) continue;
+
+    const dist = calculateDistance(
+      newReport.lat, newReport.lng,
+      report.lat,    report.lng
+    );
+
+    if (dist <= DUPLICATE_RADIUS_METRES && report.issue_id) {
+      return report.issue_id;
+    }
+  }
+  return null;
+}
+
+/**
+ * Calculates representative location (average latitude & longitude)
+ * for a cluster of reports belonging to the same issue.
+ */
+function calculateIssueLocation(reports) {
+  if (!reports || reports.length === 0) {
+    return { lat: 13.0827, lng: 80.2707 };
+  }
+  let sumLat = 0;
+  let sumLng = 0;
+  for (const r of reports) {
+    sumLat += (parseFloat(r.lat) || 13.0827);
+    sumLng += (parseFloat(r.lng) || 80.2707);
+  }
+  return {
+    lat: parseFloat((sumLat / reports.length).toFixed(6)),
+    lng: parseFloat((sumLng / reports.length).toFixed(6))
+  };
 }
 
 // ============================================================
@@ -465,6 +523,124 @@ app.get('/api/reports/prioritized', async (req, res) => {
   res.json({ success: true, reports: active });
 });
 
+// ── GET /api/issues ───────────────────────────────────────────
+// Returns UNIQUE issue clusters (grouped by issue_id).
+// Does NOT return one item per report.
+// Includes representative common location (average lat/lng),
+// report_count, priority_score, priority_level, and list of reports.
+// ─────────────────────────────────────────────────────────────
+app.get('/api/issues', async (req, res) => {
+  let allReports = [];
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('civic_reports')
+        .select('*')
+        .order('timestamp', { ascending: false });
+      if (!error) allReports = data || [];
+    } catch (e) {
+      console.error('GET /api/issues error:', e.message);
+    }
+  } else {
+    allReports = fallbackReports;
+  }
+
+  // Group reports by issue_id
+  const issuesMap = {};
+  for (const r of allReports) {
+    const issueId = r.issue_id || `ISSUE_${r.id}`;
+    if (!issuesMap[issueId]) {
+      issuesMap[issueId] = [];
+    }
+    issuesMap[issueId].push(r);
+  }
+
+  const issuesList = Object.keys(issuesMap).map(issueId => {
+    const reports = issuesMap[issueId];
+    const rep = reports[0];
+    const loc = calculateIssueLocation(reports);
+    const isOpen = reports.some(r => r.status !== 'Resolved' && r.status !== 'RESOLVED');
+
+    return {
+      issue_id:         issueId,
+      category:         rep.category,
+      department:       rep.department,
+      report_count:     reports.length,
+      latitude:         loc.lat,
+      longitude:        loc.lng,
+      location:         rep.location,
+      status:           isOpen ? 'OPEN' : 'RESOLVED',
+      priority_score:   rep.priority_score || 0,
+      priority_level:   rep.priority_level || 'LOW',
+      severity:         rep.severity || 2,
+      nearby_facility:  rep.nearby_facility || false,
+      high_traffic_area: rep.high_traffic_area || false,
+      reports:          reports.map(formatReportRow)
+    };
+  });
+
+  res.json({ success: true, issues: issuesList });
+});
+
+// ── GET /api/issues/prioritized ─────────────────────────────
+// Returns active unique issue clusters ordered by priority_score descending.
+// ─────────────────────────────────────────────────────────────
+app.get('/api/issues/prioritized', async (req, res) => {
+  let allReports = [];
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('civic_reports')
+        .select('*')
+        .order('timestamp', { ascending: false });
+      if (!error) allReports = data || [];
+    } catch (e) {
+      console.error('GET /api/issues/prioritized error:', e.message);
+    }
+  } else {
+    allReports = fallbackReports;
+  }
+
+  const issuesMap = {};
+  for (const r of allReports) {
+    const issueId = r.issue_id || `ISSUE_${r.id}`;
+    if (!issuesMap[issueId]) {
+      issuesMap[issueId] = [];
+    }
+    issuesMap[issueId].push(r);
+  }
+
+  const activeIssues = [];
+  for (const issueId of Object.keys(issuesMap)) {
+    const reports = issuesMap[issueId];
+    const rep = reports[0];
+    const isOpen = reports.some(r => r.status !== 'Resolved' && r.status !== 'RESOLVED');
+
+    if (isOpen) {
+      const loc = calculateIssueLocation(reports);
+      activeIssues.push({
+        issue_id:         issueId,
+        category:         rep.category,
+        department:       rep.department,
+        report_count:     reports.length,
+        latitude:         loc.lat,
+        longitude:        loc.lng,
+        location:         rep.location,
+        status:           'OPEN',
+        priority_score:   rep.priority_score || 0,
+        priority_level:   rep.priority_level || 'LOW',
+        severity:         rep.severity || 2,
+        nearby_facility:  rep.nearby_facility || false,
+        high_traffic_area: rep.high_traffic_area || false,
+        reports:          reports.map(formatReportRow)
+      });
+    }
+  }
+
+  activeIssues.sort((a, b) => b.priority_score - a.priority_score);
+  res.json({ success: true, issues: activeIssues });
+});
+
 // ── POST /api/reports — COMPLETE TRIAGE PIPELINE ─────────────
 //
 // This is the most important route. It follows all 20 steps:
@@ -594,18 +770,49 @@ app.post('/api/reports', upload.single('image'), async (req, res) => {
   }
 
   // ── 4. SAVE THE REPORT FIRST ─────────────────────────────
-  // This must happen before any calculation. If duplicate
-  // detection or priority scoring fails later, the citizen's
-  // report is already safely stored.
+  const dbInsertPayload = {
+    id:               initialReport.id,
+    category:         initialReport.category,
+    department:       initialReport.department,
+    description:      initialReport.description,
+    location:         initialReport.location,
+    lat:              initialReport.lat,
+    lng:              initialReport.lng,
+    status:           initialReport.status,
+    severity:         initialReport.severity,
+    duplicates_count: initialReport.duplicates_count,
+    image_url:        initialReport.image_url,
+    reporter_phone:   initialReport.reporter_phone,
+    priority_score:   initialReport.priority_score,
+    priority_level:   initialReport.priority_level,
+    nearby_facility:  initialReport.nearby_facility,
+    facility_type:    initialReport.facility_type,
+    facility_name:    initialReport.facility_name,
+    facility_distance: initialReport.facility_distance,
+    high_traffic_area: initialReport.high_traffic_area,
+    issue_id:          initialReport.issue_id || null
+  };
+
   if (supabase) {
     try {
-      const { error } = await supabase
+      let { error } = await supabase
         .from('civic_reports')
-        .insert([initialReport]);
-      if (error) throw error;
+        .insert([dbInsertPayload]);
+
+      if (error && error.message && error.message.includes('issue_id')) {
+        console.warn('Supabase table missing issue_id column. Retrying insert without issue_id...');
+        const sanitizedPayload = { ...dbInsertPayload };
+        delete sanitizedPayload.issue_id;
+        const retryResult = await supabase
+          .from('civic_reports')
+          .insert([sanitizedPayload]);
+        if (retryResult.error) throw retryResult.error;
+      } else if (error) {
+        throw error;
+      }
     } catch (err) {
       console.error('Failed to save report to Supabase:', err.message);
-      return res.status(500).json({ success: false, message: 'Could not save report. Please try again.' });
+      return res.status(500).json({ success: false, message: 'Could not save report. Please try again.', details: err.message });
     }
   } else {
     // In-memory fallback
@@ -622,6 +829,8 @@ app.post('/api/reports', upload.single('image'), async (req, res) => {
   let priorityScore  = 0;
   let priorityLevel  = 'LOW';
   let severity       = 2;
+  let issueId        = null;
+  let issueLoc       = { lat: newLat, lng: newLng };
 
   try {
     // ── 5. Fetch existing open reports of the same category ──
@@ -641,18 +850,32 @@ app.post('/api/reports', upload.single('image'), async (req, res) => {
       );
     }
 
-    // ── 6. Find duplicates within 100 metres ────────────────
+    // ── 6. Check for existing matching issue within 100 metres ──
+    let matchedIssueId = findMatchingIssue(
+      { id: reportId, category, lat: newLat, lng: newLng },
+      existingReports
+    );
+
+    // If an unresolved matching issue exists within 100m, reuse its issue_id.
+    // Otherwise, generate a brand new unique issue_id.
+    issueId = matchedIssueId || generateIssueId();
+    initialReport.issue_id = issueId;
+
+    // ── 7. Find all duplicate reports belonging to this issue cluster ─
     const duplicateReports = findDuplicateReports(
       { id: reportId, category, lat: newLat, lng: newLng },
       existingReports
     );
 
-    // ── 7. Calculate total count ─────────────────────────────
-    // duplicateReports contains the OTHER matching reports.
-    // We add 1 for the new report itself.
-    //
-    // Example: 3 existing duplicates + this new report = 4 total
-    duplicateCount = duplicateReports.length + 1;
+    const allClusterReports = [
+      ...duplicateReports,
+      { id: reportId, category, lat: newLat, lng: newLng }
+    ];
+
+    duplicateCount = allClusterReports.length;
+
+    // Calculate representative location (average lat/lng of cluster)
+    issueLoc = calculateIssueLocation(allClusterReports);
 
     // ── 8. Nearby school or hospital? ───────────────────────
     facilityResult = findNearbyFacility(newLat, newLng);
@@ -678,8 +901,9 @@ app.post('/api/reports', upload.single('image'), async (req, res) => {
       priorityScore = Math.max(priorityScore, severity * 18);
     }
 
-    // ── 14. Update the new report with all calculated fields ─
+    // ── 14. Update the new report with issue_id and calculated fields ─
     const updatePayload = {
+      issue_id:          issueId,
       duplicates_count:  duplicateCount,
       priority_score:    priorityScore,
       priority_level:    priorityLevel,
@@ -692,31 +916,40 @@ app.post('/api/reports', upload.single('image'), async (req, res) => {
     };
 
     if (supabase) {
-      await supabase
-        .from('civic_reports')
-        .update(updatePayload)
-        .eq('id', reportId);
-
-      // ── 15. Update ALL duplicate reports ──────────────────
-      // Every matching report now shows the same cluster count
-      // and the recalculated priority.
-      //
-      // Example result (5 matching reports):
-      //   REP-001 → duplicates_count = 5, severity = 5 (CRITICAL)
-      //   REP-002 → duplicates_count = 5, severity = 5 (CRITICAL)
-      //   REP-003 → duplicates_count = 5, severity = 5 (CRITICAL)
-      //   REP-004 → duplicates_count = 5, severity = 5 (CRITICAL)
-      //   REP-005 → duplicates_count = 5, severity = 5 (CRITICAL)
-      for (const dup of duplicateReports) {
+      try {
         await supabase
           .from('civic_reports')
-          .update({
-            duplicates_count: duplicateCount,
-            priority_score:   priorityScore,
-            priority_level:   priorityLevel,
-            severity
-          })
-          .eq('id', dup.id);
+          .update(updatePayload)
+          .eq('id', reportId);
+      } catch (updErr) {
+        delete updatePayload.issue_id;
+        await supabase.from('civic_reports').update(updatePayload).eq('id', reportId);
+      }
+
+      // ── 15. Update ALL duplicate reports in the cluster ────
+      for (const dup of duplicateReports) {
+        try {
+          await supabase
+            .from('civic_reports')
+            .update({
+              issue_id:         issueId,
+              duplicates_count: duplicateCount,
+              priority_score:   priorityScore,
+              priority_level:   priorityLevel,
+              severity
+            })
+            .eq('id', dup.id);
+        } catch (dupUpdErr) {
+          await supabase
+            .from('civic_reports')
+            .update({
+              duplicates_count: duplicateCount,
+              priority_score:   priorityScore,
+              priority_level:   priorityLevel,
+              severity
+            })
+            .eq('id', dup.id);
+        }
       }
     } else {
       // In-memory fallback update
@@ -725,6 +958,7 @@ app.post('/api/reports', upload.single('image'), async (req, res) => {
         const isDup = duplicateReports.some(d => d.id === r.id);
 
         if (isNew || isDup) {
+          r.issue_id         = issueId;
           r.duplicatesCount  = duplicateCount;
           r.severity         = severity;
           r.priority_score   = priorityScore;
@@ -740,12 +974,10 @@ app.post('/api/reports', upload.single('image'), async (req, res) => {
       }
     }
   } catch (err) {
-    // The citizen's report is already saved — do not reject the request.
-    // Log the error and continue with default priority values.
     console.error('Triage pipeline error (report already saved):', err.message);
   }
 
-  // ── 16. Return enriched response to the frontend ─────────
+  // ── 16. Return enriched response with report AND issue representation ─
   return res.status(201).json({
     success: true,
     spam: false,
@@ -753,6 +985,7 @@ app.post('/api/reports', upload.single('image'), async (req, res) => {
     aiTriage: aiTriage,
     report: {
       ...formatReportRow(initialReport),
+      issue_id:          issueId,
       category,
       department,
       priority:          (aiTriage && aiTriage.priority) ? aiTriage.priority : `${priorityLevel} Priority`,
@@ -767,6 +1000,20 @@ app.post('/api/reports', upload.single('image'), async (req, res) => {
       severity:          (aiTriage && aiTriage.severity) ? aiTriage.severity : severity,
       zoneInfo:          (aiTriage && aiTriage.zoneInfo) ? aiTriage.zoneInfo : {},
       aiAnalysis:        (aiTriage && aiTriage.analysis) ? aiTriage.analysis : {}
+    },
+    issue: {
+      issue_id:          issueId,
+      category,
+      department,
+      report_count:      duplicateCount,
+      latitude:          issueLoc.lat,
+      longitude:         issueLoc.lng,
+      status:            'OPEN',
+      priority_score:    priorityScore,
+      priority_level:    priorityLevel,
+      severity,
+      nearby_facility:   facilityResult.found,
+      high_traffic_area: isTraffic
     }
   });
 });
@@ -923,7 +1170,7 @@ app.delete('/api/reports/:id', async (req, res) => {
 });
 
 // ── Serve frontend ────────────────────────────────────────────
-app.get('/{0,}', (req, res) => {
+app.use((req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
