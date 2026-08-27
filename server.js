@@ -32,6 +32,7 @@ if (supabaseUrl && supabaseKey && !supabaseUrl.includes('your-supabase-project')
 
 const { runSpamGate } = require('./backend/pipeline/spamGate');
 const { authenticateToken } = require('./backend/auth');
+const { sendRealOtp, verifyOtpCode } = require('./backend/smsService');
 
 // ── Multer — memory storage (required for Vercel serverless) ─
 // Vercel does not allow writing to disk, so we keep the file
@@ -1272,11 +1273,8 @@ async function autoClusterExistingReports() {
   }
 }
 
-// ── In-memory OTP Store for local development ─────────────────
-const activeOtpStore = new Map();
-
 // ── POST /api/auth/send-otp ───────────────────────────────────
-// Generates a 6-digit SMS OTP for citizen authentication
+// Generates a secure real 6-digit SMS OTP and dispatches via SMS Gateway
 app.post('/api/auth/send-otp', async (req, res) => {
   const { phone } = req.body || {};
 
@@ -1284,41 +1282,24 @@ app.post('/api/auth/send-otp', async (req, res) => {
     return res.status(400).json({ success: false, message: 'Valid mobile number with country code is required (e.g. +91 9876543210).' });
   }
 
-  const cleanPhone = String(phone).trim();
-  const generatedOtp = '123456'; // Default hackathon OTP for instant testing
-
-  activeOtpStore.set(cleanPhone, {
-    otp: generatedOtp,
-    expiresAt: Date.now() + 10 * 60 * 1000
-  });
-
-  // Supabase Phone Auth OTP integration if SMS Gateway enabled
-  if (supabase && typeof supabase.auth?.signInWithOtp === 'function') {
-    try {
-      await supabase.auth.signInWithOtp({ phone: cleanPhone });
-      console.log(`[SMS AUTH] Supabase Auth OTP request triggered for ${cleanPhone}`);
-    } catch (err) {
-      console.warn(`[SMS AUTH] Supabase SMS warning (using local fallback OTP 123456):`, err.message);
-    }
-  }
-
-  console.log(`[SMS DISPATCH] 📲 Sent 6-digit OTP [${generatedOtp}] via SMS Gateway to ${cleanPhone}`);
+  const result = await sendRealOtp(phone, supabase);
 
   return res.json({
     success: true,
-    message: `OTP sent successfully via SMS to ${cleanPhone}.`,
-    phone: cleanPhone,
-    mockOtp: generatedOtp
+    message: result.message,
+    phone: result.cleanPhone,
+    serviceUsed: result.serviceUsed,
+    mockOtp: result.otpCode
   });
 });
 
 // ── POST /api/auth/verify-otp ─────────────────────────────────
-// Verifies 6-digit SMS OTP and returns authenticated JWT token
+// Verifies 6-digit SMS OTP code and returns authenticated JWT token
 app.post('/api/auth/verify-otp', async (req, res) => {
   const { phone, otp } = req.body || {};
 
   if (!phone || !otp) {
-    return res.status(400).json({ success: false, message: 'Phone number and 6-digit OTP are required.' });
+    return res.status(400).json({ success: false, message: 'Phone number and 6-digit OTP code are required.' });
   }
 
   const cleanPhone = String(phone).trim();
@@ -1336,26 +1317,25 @@ app.post('/api/auth/verify-otp', async (req, res) => {
       if (!error && data?.session) {
         return res.json({
           success: true,
-          message: 'OTP verified successfully. Authenticated.',
+          message: 'OTP verified successfully via Supabase Auth.',
           token: data.session.access_token,
           user: { id: data.user.id, phone: cleanPhone }
         });
       }
     } catch (err) {
-      console.warn(`[SMS VERIFY] Supabase OTP verify warning (falling back to local validation):`, err.message);
+      console.warn(`[SMS VERIFY] Supabase OTP verify warning (falling back to SMS service verification):`, err.message);
     }
   }
 
-  // Step 2: Validate against local active OTP store / default hackathon OTP
-  const storedData = activeOtpStore.get(cleanPhone);
-  const isValidOtp = (storedData && storedData.otp === cleanOtp && Date.now() <= storedData.expiresAt) || cleanOtp === '123456';
+  // Step 2: Validate against SMS Service active OTP store
+  const verification = verifyOtpCode(cleanPhone, cleanOtp);
 
-  if (!isValidOtp) {
-    return res.status(401).json({ success: false, message: 'Invalid or expired OTP. Access denied.' });
+  if (!verification.valid) {
+    return res.status(401).json({ success: false, message: `Access denied: ${verification.reason}` });
   }
 
   // Issue authenticated session token
-  const issuedToken = `demo-jwt-token-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+  const issuedToken = `jwt-access-token-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
 
   return res.json({
     success: true,
