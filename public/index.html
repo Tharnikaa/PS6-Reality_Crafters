@@ -1379,7 +1379,7 @@
           <div class="flex items-center justify-between mb-1">
             <span class="text-xs font-mono font-bold text-slate-700">${rep.id}</span>
             <div class="flex items-center gap-1.5">
-              ${rep.duplicatesCount > 1 ? `<span class="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">+${rep.duplicatesCount} clustered</span>` : ''}
+              ${rep.duplicatesCount > 1 ? `<span class="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">+${rep.duplicatesCount - 1} others reported</span>` : ''}
               <span class="w-5 h-2 rounded-full border border-black/10 inline-block shadow-sm" style="background-color: ${sevColor.hex};"></span>
               <span class="text-[10px] font-bold px-1.5 py-0.5 rounded border ${sevColor.badgeBg}">Sev ${rep.severity}/5</span>
             </div>
