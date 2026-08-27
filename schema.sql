@@ -69,6 +69,7 @@ ALTER TABLE civic_reports ADD COLUMN IF NOT EXISTS facility_type     TEXT;
 ALTER TABLE civic_reports ADD COLUMN IF NOT EXISTS facility_name     TEXT;
 ALTER TABLE civic_reports ADD COLUMN IF NOT EXISTS facility_distance DOUBLE PRECISION;
 ALTER TABLE civic_reports ADD COLUMN IF NOT EXISTS high_traffic_area BOOLEAN          DEFAULT FALSE;
+ALTER TABLE civic_reports ADD COLUMN IF NOT EXISTS issue_id          TEXT;
 
 -- ── Row Level Security (RLS) ──────────────────────────────────
 -- Allows the frontend to read/write through the Supabase anon key

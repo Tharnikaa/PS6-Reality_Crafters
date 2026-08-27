@@ -45,6 +45,17 @@ async function runMultiLayerSpamCheck(reportPayload, imageInput, options = {}) {
   let timeDifferenceVal = null;
 
   // -------------------------------------------------------------
+  // BASIC PAYLOAD VALIDATION: NO_PHOTO & EMPTY_DESCRIPTION
+  // -------------------------------------------------------------
+  if (!imageInput || (typeof imageInput === 'string' && imageInput.trim() === '')) {
+    reasons.push('NO_PHOTO');
+  }
+
+  if (reportPayload.description !== undefined && String(reportPayload.description).trim() === '') {
+    reasons.push('EMPTY_DESCRIPTION');
+  }
+
+  // -------------------------------------------------------------
   // LAYER A: DEVICE FREQUENCY CHECK
   // -------------------------------------------------------------
   let deviceReportCount = 0;
@@ -52,6 +63,7 @@ async function runMultiLayerSpamCheck(reportPayload, imageInput, options = {}) {
     deviceReportCount = await countRecentReportsFromDevice(deviceId, options);
   } catch (err) {
     console.error(`[SPAM] Device frequency check error: ${err.message}`);
+    throw err;
   }
 
   if (deviceReportCount >= 3) {

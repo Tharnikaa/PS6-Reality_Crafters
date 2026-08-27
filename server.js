@@ -8,10 +8,12 @@
 // ============================================================
 
 require('dotenv').config();
+const fs      = require('fs');
 const express = require('express');
 const path    = require('path');
 const multer  = require('multer');
 const { createClient } = require('@supabase/supabase-js');
+const { analyzeCivicReport } = require('./aiAnalyser');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -69,6 +71,7 @@ const knownFacilities = [
 function formatReportRow(row) {
   return {
     id:               row.id,
+    issue_id:         row.issue_id || null,
     category:         row.category,
     department:       row.department,
     description:      row.description,
@@ -86,13 +89,16 @@ function formatReportRow(row) {
     device_id:        row.device_id || row.deviceId,
     timestamp_ms:     row.timestamp_ms || (row.timestamp && !isNaN(new Date(row.timestamp).getTime()) ? new Date(row.timestamp).getTime() : Date.now()),
     // Priority fields — returned to the frontend for display
+    priority:           row.priority          || (row.priority_level ? `${row.priority_level} Priority` : 'Medium Priority'),
     priority_score:     row.priority_score    || 0,
     priority_level:     row.priority_level    || 'LOW',
     nearby_facility:    row.nearby_facility   || false,
     facility_type:      row.facility_type     || null,
     facility_name:      row.facility_name     || null,
     facility_distance:  row.facility_distance || null,
-    high_traffic_area:  row.high_traffic_area || false
+    high_traffic_area:  row.high_traffic_area || false,
+    zoneInfo:           row.zone_info || row.zoneInfo || {},
+    aiAnalysis:         row.ai_analysis || row.aiAnalysis || {}
   };
 }
 
@@ -165,6 +171,63 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 
   // Step 5 — Multiply by Earth's radius to get metres.
   return R * c;
+}
+
+// ============================================================
+// ISSUE CLUSTERING HELPERS (issue_id)
+// ============================================================
+
+let issueCounter = 100;
+/**
+ * Generates a unique issue identifier (e.g. ISSUE_101)
+ */
+function generateIssueId() {
+  issueCounter++;
+  return `ISSUE_${issueCounter}`;
+}
+
+/**
+ * Searches for an existing open issue cluster within 100 metres
+ * matching the same category and returns its issue_id.
+ * If none found or existing issue is RESOLVED, returns null.
+ */
+function findMatchingIssue(newReport, existingReports) {
+  const DUPLICATE_RADIUS_METRES = 100;
+  for (const report of existingReports) {
+    if (report.id === newReport.id) continue;
+    if (report.status === 'Resolved' || report.status === 'RESOLVED') continue;
+    if (report.category !== newReport.category) continue;
+
+    const dist = calculateDistance(
+      newReport.lat, newReport.lng,
+      report.lat,    report.lng
+    );
+
+    if (dist <= DUPLICATE_RADIUS_METRES) {
+      return report.issue_id || `ISSUE_${report.id}`;
+    }
+  }
+  return null;
+}
+
+/**
+ * Calculates representative location (average latitude & longitude)
+ * for a cluster of reports belonging to the same issue.
+ */
+function calculateIssueLocation(reports) {
+  if (!reports || reports.length === 0) {
+    return { lat: 13.0827, lng: 80.2707 };
+  }
+  let sumLat = 0;
+  let sumLng = 0;
+  for (const r of reports) {
+    sumLat += (parseFloat(r.lat) || 13.0827);
+    sumLng += (parseFloat(r.lng) || 80.2707);
+  }
+  return {
+    lat: parseFloat((sumLat / reports.length).toFixed(6)),
+    lng: parseFloat((sumLng / reports.length).toFixed(6))
+  };
 }
 
 // ============================================================
@@ -348,7 +411,7 @@ function calculatePriority(reportScore, facilityScore, trafficScore) {
 function getPriorityLevel(score) {
   if (score >= 80) return 'CRITICAL';
   if (score >= 60) return 'HIGH';
-  if (score >= 40) return 'MEDIUM';
+  if (score >= 30) return 'MEDIUM';
   return 'LOW';
 }
 
@@ -381,16 +444,22 @@ function mapPriorityToSeverity(priorityLevel) {
 function classifyReport(description) {
   const d = (description || '').toLowerCase();
   if (d.includes('garbage') || d.includes('waste') || d.includes('trash')) {
-    return { category: 'Garbage Overflow', department: 'Solid Waste Management' };
+    return { category: 'Garbage Overflow', department: 'Solid Waste Management', departmentKey: 'solid_waste', categoryCode: 'solid_waste' };
   }
-  if (d.includes('light') || d.includes('lamp') || d.includes('streetlight')) {
-    return { category: 'Broken Streetlight', department: 'Electrical Department' };
+  if (d.includes('light') || d.includes('lamp') || d.includes('streetlight') || d.includes('electrical')) {
+    return { category: 'Broken Streetlight', department: 'Electrical Department', departmentKey: 'electrical', categoryCode: 'electrical' };
   }
   if (d.includes('water') || d.includes('drain') || d.includes('sewage') || d.includes('leak')) {
-    return { category: 'Water & Sewage Issue', department: 'Water & Sewerage' };
+    return { category: 'Water & Sewage Issue', department: 'Water & Sewerage', departmentKey: 'water_and_sewage', categoryCode: 'water_and_sewage' };
+  }
+  if (d.includes('pothole') || d.includes('road') || d.includes('footpath') || d.includes('signal') || d.includes('traffic')) {
+    return { category: 'Pothole & Surface Damage', department: 'Highways & Roads', departmentKey: 'road_and_highways', categoryCode: 'road_and_highways' };
+  }
+  if (d.includes('unrelated') || d.includes('unclear')) {
+    return { category: 'General Civic Issue', department: 'General Administration', departmentKey: 'other', categoryCode: 'other' };
   }
   // Default — most common civic issue
-  return { category: 'Pothole & Surface Damage', department: 'Highways & Roads' };
+  return { category: 'Pothole & Surface Damage', department: 'Highways & Roads', departmentKey: 'road_and_highways', categoryCode: 'road_and_highways' };
 }
 
 // ============================================================
@@ -400,44 +469,129 @@ function classifyReport(description) {
 // ── GET /api/reports ─────────────────────────────────────────
 // Returns all reports, optionally filtered by department.
 // Used by the frontend to populate both the citizen view and
-// the admin queue.
-// ─────────────────────────────────────────────────────────────
+// ── Dynamic Clustering Helper ────────────────────────────────────
+function enrichReportsWithClusters(rawReports) {
+  if (!rawReports || rawReports.length === 0) return { enrichedReports: [], issueClusters: [] };
+
+  const clusters = [];
+  const reportsCopy = rawReports.map(r => ({ ...r }));
+
+  for (const r of reportsCopy) {
+    if (r.status === 'Resolved' || r.status === 'RESOLVED') {
+      clusters.push({
+        issue_id: r.issue_id || `ISSUE_${r.id}`,
+        category: r.category,
+        department: r.department,
+        reports: [r]
+      });
+      continue;
+    }
+
+    let matchedCluster = clusters.find(c => {
+      if (c.category !== r.category) return false;
+      const isOpenCluster = c.reports.some(existing => existing.status !== 'Resolved' && existing.status !== 'RESOLVED');
+      if (!isOpenCluster) return false;
+
+      return c.reports.some(existing => {
+        const dist = calculateDistance(r.lat, r.lng, existing.lat, existing.lng);
+        return dist <= 100;
+      });
+    });
+
+    if (matchedCluster) {
+      matchedCluster.reports.push(r);
+    } else {
+      clusters.push({
+        issue_id: r.issue_id || `ISSUE_${r.id}`,
+        category: r.category,
+        department: r.department,
+        reports: [r]
+      });
+    }
+  }
+
+  const issueClusters = clusters.map(c => {
+    const loc = calculateIssueLocation(c.reports);
+    const count = c.reports.length;
+    const rep = c.reports[0];
+    const reportScore = calculateReportScore(count);
+    const facilityResult = findNearbyFacility(loc.lat, loc.lng);
+    const isTraffic = isHighTrafficArea(rep.location || '');
+    const facilityScore = facilityResult.found ? 100 : 0;
+    const trafficScore = isTraffic ? 100 : 0;
+    let priorityScore = calculatePriority(reportScore, facilityScore, trafficScore);
+
+    c.reports.forEach(rItem => {
+      if (rItem.severity && rItem.severity >= 4) {
+        priorityScore = Math.max(priorityScore, rItem.severity * 18);
+      }
+    });
+
+    const priorityLevel = getPriorityLevel(priorityScore);
+    const severity = mapPriorityToSeverity(priorityLevel);
+
+    c.reports.forEach(rItem => {
+      rItem.issue_id = c.issue_id;
+      rItem.duplicates_count = count;
+      rItem.duplicatesCount = count;
+      rItem.priority_score = priorityScore;
+      rItem.priority_level = priorityLevel;
+      rItem.severity = Math.max(rItem.severity || 2, severity);
+    });
+
+    return {
+      issue_id: c.issue_id,
+      category: c.category,
+      department: c.department,
+      report_count: count,
+      latitude: loc.lat,
+      longitude: loc.lng,
+      location: rep.location,
+      status: c.reports.some(r => r.status !== 'Resolved' && r.status !== 'RESOLVED') ? 'OPEN' : 'RESOLVED',
+      priority_score: priorityScore,
+      priority_level: priorityLevel,
+      severity: severity,
+      nearby_facility: facilityResult.found,
+      high_traffic_area: isTraffic,
+      reports: c.reports.map(formatReportRow)
+    };
+  });
+
+  return { enrichedReports: reportsCopy, issueClusters };
+}
+
+// ── GET /api/reports ─────────────────────────────────────────
 app.get('/api/reports', async (req, res) => {
   const { department } = req.query;
+  let allData = [];
 
   if (supabase) {
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from('civic_reports')
         .select('*')
         .order('timestamp', { ascending: false });
 
-      if (department && department !== 'All') {
-        query = query.eq('department', department);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return res.json((data || []).map(formatReportRow));
+      if (!error) allData = data || [];
     } catch (err) {
       console.error('GET /api/reports Supabase error, using fallback:', err.message);
+      allData = fallbackReports;
     }
+  } else {
+    allData = fallbackReports;
   }
 
-  // In-memory fallback
-  let results = fallbackReports;
+  const { enrichedReports } = enrichReportsWithClusters(allData);
+  let results = enrichedReports;
   if (department && department !== 'All') {
-    results = fallbackReports.filter(r => r.department === department);
+    results = results.filter(r => r.department === department);
   }
-  res.json(results);
+  res.json(results.map(formatReportRow));
 });
 
 // ── GET /api/reports/prioritized ─────────────────────────────
-// Returns all open reports sorted by priority_score descending.
-// NOTE: This route must be registered BEFORE /api/reports/:id
-//       so Express does not mistake "prioritized" for an :id.
-// ─────────────────────────────────────────────────────────────
 app.get('/api/reports/prioritized', async (req, res) => {
+  let allData = [];
   if (supabase) {
     try {
       const { data, error } = await supabase
@@ -447,18 +601,66 @@ app.get('/api/reports/prioritized', async (req, res) => {
         .neq('status', 'RESOLVED')
         .order('priority_score', { ascending: false });
 
-      if (error) throw error;
-      return res.json({ success: true, reports: (data || []).map(formatReportRow) });
+      if (!error) allData = data || [];
     } catch (err) {
-      console.error('GET /api/reports/prioritized error, using fallback:', err.message);
+      allData = fallbackReports;
     }
+  } else {
+    allData = fallbackReports;
   }
 
-  const active = fallbackReports
+  const { enrichedReports } = enrichReportsWithClusters(allData);
+  const active = enrichedReports
     .filter(r => r.status !== 'Resolved' && r.status !== 'RESOLVED')
     .sort((a, b) => (b.priority_score || 0) - (a.priority_score || 0));
 
-  res.json({ success: true, reports: active });
+  res.json({ success: true, reports: active.map(formatReportRow) });
+});
+
+// ── GET /api/issues ───────────────────────────────────────────
+app.get('/api/issues', async (req, res) => {
+  let allReports = [];
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('civic_reports')
+        .select('*')
+        .order('timestamp', { ascending: false });
+      if (!error) allReports = data || [];
+    } catch (e) {
+      console.error('GET /api/issues error:', e.message);
+    }
+  } else {
+    allReports = fallbackReports;
+  }
+
+  const { issueClusters } = enrichReportsWithClusters(allReports);
+  res.json({ success: true, issues: issueClusters });
+});
+
+// ── GET /api/issues/prioritized ─────────────────────────────
+app.get('/api/issues/prioritized', async (req, res) => {
+  let allReports = [];
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('civic_reports')
+        .select('*')
+        .order('timestamp', { ascending: false });
+      if (!error) allReports = data || [];
+    } catch (e) {
+      console.error('GET /api/issues/prioritized error:', e.message);
+    }
+  } else {
+    allReports = fallbackReports;
+  }
+
+  const { issueClusters } = enrichReportsWithClusters(allReports);
+  const activeIssues = issueClusters
+    .filter(i => i.status === 'OPEN')
+    .sort((a, b) => b.priority_score - a.priority_score);
+
+  res.json({ success: true, issues: activeIssues });
 });
 
 // ── POST /api/reports — COMPLETE TRIAGE PIPELINE ─────────────
@@ -495,23 +697,44 @@ app.post('/api/reports', authenticateToken, upload.single('image'), async (req, 
 
   // ── 1. Upload image ──────────────────────────────────────
   let imageUrl = 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=500&q=80';
+  let tempImagePath = null;
   if (req.file) {
     imageUrl = await uploadImageToSupabase(req.file.buffer, req.file.originalname);
+    try {
+      const uploadsDir = path.join(__dirname, 'public/uploads');
+      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+      tempImagePath = path.join(uploadsDir, `temp-${Date.now()}-${req.file.originalname}`);
+      fs.writeFileSync(tempImagePath, req.file.buffer);
+    } catch (e) {
+      console.warn('Could not save temp file for image analysis:', e.message);
+    }
   } else if (req.body.imageUrl) {
     imageUrl = req.body.imageUrl;
   }
 
-  // ── 2. Classify category & department ───────────────────
-  const { category, department } = classifyReport(description);
+  // ── 2. Run Multimodal AI Triage (Gemini LLM / Vision / Location-Aware) ──
+  let aiTriage = null;
+  try {
+    aiTriage = await analyzeCivicReport(description, tempImagePath, location);
+  } catch (aiErr) {
+    console.error('AI Triage error, using fallback classification:', aiErr.message);
+  }
+
+  if (tempImagePath && fs.existsSync(tempImagePath)) {
+    try { fs.unlinkSync(tempImagePath); } catch (e) {}
+  }
+
+  // ── 3. Classify category & department ───────────────────
+  const defaultClass = classifyReport(description);
+  const category   = (aiTriage && aiTriage.category) ? aiTriage.category : defaultClass.category;
+  const department = (aiTriage && aiTriage.department) ? aiTriage.department : defaultClass.department;
 
   const newLat      = parseFloat(lat) || 13.0827;
   const newLng      = parseFloat(lng) || 80.2707;
   const reportLoc   = location || 'Anna Salai, Chennai (GPS Locked)';
   const reportId    = `REP-${Math.floor(1000 + Math.random() * 9000)}`;
 
-  // ── 3. Build the initial report object ──────────────────
-  // These are safe defaults. All priority fields will be
-  // recalculated and updated after the report is saved.
+  // ── 4. Build the initial report object ──────────────────
   const initialReport = {
     id:               reportId,
     category,
@@ -521,8 +744,8 @@ app.post('/api/reports', authenticateToken, upload.single('image'), async (req, 
     lat:              newLat,
     lng:              newLng,
     status:           'Pending',
-    severity:         2,        // default LOW, will be updated
-    duplicates_count: 1,        // default, will be updated
+    severity:         (aiTriage && aiTriage.severity) ? aiTriage.severity : 2,
+    duplicates_count: 1,
     image_url:        imageUrl,
     reporter_phone:   reporterPhone || '+91 9876543210',
     priority_score:   0,
@@ -531,7 +754,9 @@ app.post('/api/reports', authenticateToken, upload.single('image'), async (req, 
     facility_type:    null,
     facility_name:    null,
     facility_distance: null,
-    high_traffic_area: false
+    high_traffic_area: false,
+    zone_info:        (aiTriage && aiTriage.zoneInfo) ? aiTriage.zoneInfo : {},
+    ai_analysis:      (aiTriage && aiTriage.analysis) ? aiTriage.analysis : {}
   };
 
   const deviceIdentifier = req.body.device_id || req.body.deviceId || req.headers['x-device-id'] || 'device-default';
@@ -567,18 +792,49 @@ app.post('/api/reports', authenticateToken, upload.single('image'), async (req, 
   }
 
   // ── 4. SAVE THE REPORT FIRST ─────────────────────────────
-  // This must happen before any calculation. If duplicate
-  // detection or priority scoring fails later, the citizen's
-  // report is already safely stored.
+  const dbInsertPayload = {
+    id:               initialReport.id,
+    category:         initialReport.category,
+    department:       initialReport.department,
+    description:      initialReport.description,
+    location:         initialReport.location,
+    lat:              initialReport.lat,
+    lng:              initialReport.lng,
+    status:           initialReport.status,
+    severity:         initialReport.severity,
+    duplicates_count: initialReport.duplicates_count,
+    image_url:        initialReport.image_url,
+    reporter_phone:   initialReport.reporter_phone,
+    priority_score:   initialReport.priority_score,
+    priority_level:   initialReport.priority_level,
+    nearby_facility:  initialReport.nearby_facility,
+    facility_type:    initialReport.facility_type,
+    facility_name:    initialReport.facility_name,
+    facility_distance: initialReport.facility_distance,
+    high_traffic_area: initialReport.high_traffic_area,
+    issue_id:          initialReport.issue_id || null
+  };
+
   if (supabase) {
     try {
-      const { error } = await supabase
+      let { error } = await supabase
         .from('civic_reports')
-        .insert([initialReport]);
-      if (error) throw error;
+        .insert([dbInsertPayload]);
+
+      if (error && error.message && error.message.includes('issue_id')) {
+        console.warn('Supabase table missing issue_id column. Retrying insert without issue_id...');
+        const sanitizedPayload = { ...dbInsertPayload };
+        delete sanitizedPayload.issue_id;
+        const retryResult = await supabase
+          .from('civic_reports')
+          .insert([sanitizedPayload]);
+        if (retryResult.error) throw retryResult.error;
+      } else if (error) {
+        throw error;
+      }
     } catch (err) {
       console.error('Failed to save report to Supabase:', err.message);
-      return res.status(500).json({ success: false, message: 'Could not save report. Please try again.' });
+      return res.status(500).json({ success: false, message: 'Could not save report. Please try again.', details: err.message });
     }
   } else {
     // In-memory fallback
@@ -595,6 +851,8 @@ app.post('/api/reports', authenticateToken, upload.single('image'), async (req, 
   let priorityScore  = 0;
   let priorityLevel  = 'LOW';
   let severity       = 2;
+  let issueId        = null;
+  let issueLoc       = { lat: newLat, lng: newLng };
 
   try {
     // ── 5. Fetch existing open reports of the same category ──
@@ -614,18 +872,32 @@ app.post('/api/reports', authenticateToken, upload.single('image'), async (req, 
       );
     }
 
-    // ── 6. Find duplicates within 100 metres ────────────────
+    // ── 6. Check for existing matching issue within 100 metres ──
+    let matchedIssueId = findMatchingIssue(
+      { id: reportId, category, lat: newLat, lng: newLng },
+      existingReports
+    );
+
+    // If an unresolved matching issue exists within 100m, reuse its issue_id.
+    // Otherwise, generate a brand new unique issue_id.
+    issueId = matchedIssueId || generateIssueId();
+    initialReport.issue_id = issueId;
+
+    // ── 7. Find all duplicate reports belonging to this issue cluster ─
     const duplicateReports = findDuplicateReports(
       { id: reportId, category, lat: newLat, lng: newLng },
       existingReports
     );
 
-    // ── 7. Calculate total count ─────────────────────────────
-    // duplicateReports contains the OTHER matching reports.
-    // We add 1 for the new report itself.
-    //
-    // Example: 3 existing duplicates + this new report = 4 total
-    duplicateCount = duplicateReports.length + 1;
+    const allClusterReports = [
+      ...duplicateReports,
+      { id: reportId, category, lat: newLat, lng: newLng }
+    ];
+
+    duplicateCount = allClusterReports.length;
+
+    // Calculate representative location (average lat/lng of cluster)
+    issueLoc = calculateIssueLocation(allClusterReports);
 
     // ── 8. Nearby school or hospital? ───────────────────────
     facilityResult = findNearbyFacility(newLat, newLng);
@@ -642,8 +914,18 @@ app.post('/api/reports', authenticateToken, upload.single('image'), async (req, 
     priorityLevel = getPriorityLevel(priorityScore);
     severity      = mapPriorityToSeverity(priorityLevel);
 
-    // ── 14. Update the new report with all calculated fields ─
+    // ── Incorporate AI Triage (Visual & Zone Sensitivity Escalation) ──
+    if (aiTriage && aiTriage.severity && aiTriage.severity > severity) {
+      severity = aiTriage.severity;
+      if (severity >= 5) priorityLevel = 'CRITICAL';
+      else if (severity === 4) priorityLevel = 'HIGH';
+      else if (severity === 3) priorityLevel = 'MEDIUM';
+      priorityScore = Math.max(priorityScore, severity * 18);
+    }
+
+    // ── 14. Update the new report with issue_id and calculated fields ─
     const updatePayload = {
+      issue_id:          issueId,
       duplicates_count:  duplicateCount,
       priority_score:    priorityScore,
       priority_level:    priorityLevel,
@@ -656,31 +938,40 @@ app.post('/api/reports', authenticateToken, upload.single('image'), async (req, 
     };
 
     if (supabase) {
-      await supabase
-        .from('civic_reports')
-        .update(updatePayload)
-        .eq('id', reportId);
-
-      // ── 15. Update ALL duplicate reports ──────────────────
-      // Every matching report now shows the same cluster count
-      // and the recalculated priority.
-      //
-      // Example result (5 matching reports):
-      //   REP-001 → duplicates_count = 5, severity = 5 (CRITICAL)
-      //   REP-002 → duplicates_count = 5, severity = 5 (CRITICAL)
-      //   REP-003 → duplicates_count = 5, severity = 5 (CRITICAL)
-      //   REP-004 → duplicates_count = 5, severity = 5 (CRITICAL)
-      //   REP-005 → duplicates_count = 5, severity = 5 (CRITICAL)
-      for (const dup of duplicateReports) {
+      try {
         await supabase
           .from('civic_reports')
-          .update({
-            duplicates_count: duplicateCount,
-            priority_score:   priorityScore,
-            priority_level:   priorityLevel,
-            severity
-          })
-          .eq('id', dup.id);
+          .update(updatePayload)
+          .eq('id', reportId);
+      } catch (updErr) {
+        delete updatePayload.issue_id;
+        await supabase.from('civic_reports').update(updatePayload).eq('id', reportId);
+      }
+
+      // ── 15. Update ALL duplicate reports in the cluster ────
+      for (const dup of duplicateReports) {
+        try {
+          await supabase
+            .from('civic_reports')
+            .update({
+              issue_id:         issueId,
+              duplicates_count: duplicateCount,
+              priority_score:   priorityScore,
+              priority_level:   priorityLevel,
+              severity
+            })
+            .eq('id', dup.id);
+        } catch (dupUpdErr) {
+          await supabase
+            .from('civic_reports')
+            .update({
+              duplicates_count: duplicateCount,
+              priority_score:   priorityScore,
+              priority_level:   priorityLevel,
+              severity
+            })
+            .eq('id', dup.id);
+        }
       }
     } else {
       // In-memory fallback update
@@ -689,6 +980,7 @@ app.post('/api/reports', authenticateToken, upload.single('image'), async (req, 
         const isDup = duplicateReports.some(d => d.id === r.id);
 
         if (isNew || isDup) {
+          r.issue_id         = issueId;
           r.duplicatesCount  = duplicateCount;
           r.severity         = severity;
           r.priority_score   = priorityScore;
@@ -704,18 +996,21 @@ app.post('/api/reports', authenticateToken, upload.single('image'), async (req, 
       }
     }
   } catch (err) {
-    // The citizen's report is already saved — do not reject the request.
-    // Log the error and continue with default priority values.
     console.error('Triage pipeline error (report already saved):', err.message);
   }
 
-  // ── 16. Return enriched response to the frontend ─────────
+  // ── 16. Return enriched response with report AND issue representation ─
   return res.status(201).json({
     success: true,
     spam: false,
     deleted: false,
+    aiTriage: aiTriage,
     report: {
       ...formatReportRow(initialReport),
+      issue_id:          issueId,
+      category,
+      department,
+      priority:          (aiTriage && aiTriage.priority) ? aiTriage.priority : `${priorityLevel} Priority`,
       duplicatesCount:   duplicateCount,
       priority_score:    priorityScore,
       priority_level:    priorityLevel,
@@ -724,7 +1019,23 @@ app.post('/api/reports', authenticateToken, upload.single('image'), async (req, 
       facility_name:     facilityResult.name,
       facility_distance: facilityResult.distance,
       high_traffic_area: isTraffic,
-      severity
+      severity:          (aiTriage && aiTriage.severity) ? aiTriage.severity : severity,
+      zoneInfo:          (aiTriage && aiTriage.zoneInfo) ? aiTriage.zoneInfo : {},
+      aiAnalysis:        (aiTriage && aiTriage.analysis) ? aiTriage.analysis : {}
+    },
+    issue: {
+      issue_id:          issueId,
+      category,
+      department,
+      report_count:      duplicateCount,
+      latitude:          issueLoc.lat,
+      longitude:         issueLoc.lng,
+      status:            'OPEN',
+      priority_score:    priorityScore,
+      priority_level:    priorityLevel,
+      severity,
+      nearby_facility:   facilityResult.found,
+      high_traffic_area: isTraffic
     }
   });
 });
@@ -881,11 +1192,104 @@ app.delete('/api/reports/:id', async (req, res) => {
 });
 
 // ── Serve frontend ────────────────────────────────────────────
-app.get('/{0,}', (req, res) => {
+app.use((req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// ── Auto-cluster pre-existing database reports on startup ─────────
+async function autoClusterExistingReports() {
+  if (!supabase) return;
+  try {
+    const { data: allReports, error } = await supabase
+      .from('civic_reports')
+      .select('*')
+      .neq('status', 'Resolved')
+      .neq('status', 'RESOLVED');
+
+    if (error || !allReports) return;
+
+    for (let i = 0; i < allReports.length; i++) {
+      const repA = allReports[i];
+      const cluster = [repA];
+
+      for (let j = i + 1; j < allReports.length; j++) {
+        const repB = allReports[j];
+        if (repA.category === repB.category) {
+          const dist = calculateDistance(repA.lat, repA.lng, repB.lat, repB.lng);
+          if (dist <= 100) {
+            cluster.push(repB);
+          }
+        }
+      }
+
+      if (cluster.length > 1) {
+        const sharedIssueId = repA.issue_id || `ISSUE_${repA.id}`;
+        const count = cluster.length;
+        const reportScore = calculateReportScore(count);
+        const facilityResult = findNearbyFacility(repA.lat, repA.lng);
+        const isTraffic = isHighTrafficArea(repA.location);
+        const facilityScore = facilityResult.found ? 100 : 0;
+        const trafficScore = isTraffic ? 100 : 0;
+        const score = calculatePriority(reportScore, facilityScore, trafficScore);
+        const level = getPriorityLevel(score);
+        const sev = mapPriorityToSeverity(level);
+
+        for (const item of cluster) {
+          item.issue_id = sharedIssueId;
+          item.duplicates_count = count;
+          item.priority_score = score;
+          item.priority_level = level;
+          item.severity = sev;
+
+          try {
+            await supabase
+              .from('civic_reports')
+              .update({
+                issue_id: sharedIssueId,
+                duplicates_count: count,
+                priority_score: score,
+                priority_level: level,
+                severity: sev
+              })
+              .eq('id', item.id);
+          } catch (e) {
+            await supabase
+              .from('civic_reports')
+              .update({
+                duplicates_count: count,
+                priority_score: score,
+                priority_level: level,
+                severity: sev
+              })
+              .eq('id', item.id);
+          }
+        }
+      }
+    }
+    console.log('Existing database reports clustered successfully.');
+  } catch (err) {
+    console.warn('Auto-clustering warning:', err.message);
+  }
+}
+
 // ── Start server ──────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`CivicResolve server running on http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`CivicResolve server running on http://localhost:${PORT}`);
+    autoClusterExistingReports();
+  });
+}
+
+module.exports = {
+  app,
+  classifyReport,
+  calculateDistance,
+  calculateReportScore,
+  findNearbyFacility,
+  isHighTrafficArea,
+  calculatePriority,
+  getPriorityLevel,
+  mapPriorityToSeverity,
+  findDuplicateReports,
+  enrichReportsWithClusters
+};
