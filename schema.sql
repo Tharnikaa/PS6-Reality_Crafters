@@ -71,9 +71,26 @@ ALTER TABLE civic_reports ADD COLUMN IF NOT EXISTS facility_distance DOUBLE PREC
 ALTER TABLE civic_reports ADD COLUMN IF NOT EXISTS high_traffic_area BOOLEAN          DEFAULT FALSE;
 ALTER TABLE civic_reports ADD COLUMN IF NOT EXISTS issue_id          TEXT;
 
+-- ── Table: staff_details ──────────────────────────────────────
+-- Stores municipal department staff / officials and authentication passwords.
+-- ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS staff_details (
+  id           TEXT PRIMARY KEY,                  -- e.g. STF-101
+  name         TEXT NOT NULL,                     -- Full staff name
+  email        TEXT UNIQUE NOT NULL,              -- Official email address
+  password     TEXT NOT NULL,                     -- Authentication password
+  department   TEXT NOT NULL,                     -- Responsible city department
+  role         TEXT DEFAULT 'Official',           -- Official / Supervisor / Admin
+  zone         TEXT DEFAULT 'Zone A',             -- Assigned city zone (Zone A, Zone B, etc.)
+  phone        TEXT,                              -- Contact phone number
+  active       BOOLEAN DEFAULT TRUE,              -- Employment active status
+  created_at   TIMESTAMPTZ DEFAULT NOW()          -- Account creation timestamp
+);
+
+ALTER TABLE staff_details ENABLE ROW LEVEL SECURITY;
+
 -- ── Row Level Security (RLS) ──────────────────────────────────
--- Allows the frontend to read/write through the Supabase anon key
--- without needing to authenticate individual users.
+-- Allows the frontend/backend to query staff_details via Supabase anon key
 -- ─────────────────────────────────────────────────────────────
 ALTER TABLE civic_reports ENABLE ROW LEVEL SECURITY;
 
@@ -110,6 +127,39 @@ BEGIN
   ) THEN
     CREATE POLICY "Allow public delete access"
       ON civic_reports FOR DELETE USING (true);
+  END IF;
+
+  -- staff_details policies
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'staff_details' AND policyname = 'Allow public read staff access'
+  ) THEN
+    CREATE POLICY "Allow public read staff access"
+      ON staff_details FOR SELECT USING (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'staff_details' AND policyname = 'Allow public insert staff access'
+  ) THEN
+    CREATE POLICY "Allow public insert staff access"
+      ON staff_details FOR INSERT WITH CHECK (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'staff_details' AND policyname = 'Allow public update staff access'
+  ) THEN
+    CREATE POLICY "Allow public update staff access"
+      ON staff_details FOR UPDATE USING (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'staff_details' AND policyname = 'Allow public delete staff access'
+  ) THEN
+    CREATE POLICY "Allow public delete staff access"
+      ON staff_details FOR DELETE USING (true);
   END IF;
 END
 $$;

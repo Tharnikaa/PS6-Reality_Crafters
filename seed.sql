@@ -142,3 +142,41 @@ INSERT INTO civic_reports (
   'https://images.unsplash.com/photo-1509114397022-ed747cca3f65?w=500&q=80',
   '+91 9840123456', 10, 'LOW', false, null, null, null, false
 );
+
+-- ============================================================
+-- Step 5: Setup staff_details table & insert staff credentials
+-- ============================================================
+
+DROP TABLE IF EXISTS staff_details CASCADE;
+
+CREATE TABLE staff_details (
+  id           TEXT PRIMARY KEY,                  -- e.g. STF-101
+  name         TEXT NOT NULL,                     -- Staff member full name
+  email        TEXT UNIQUE NOT NULL,              -- Official email address
+  password     TEXT NOT NULL,                     -- Staff login password
+  department   TEXT NOT NULL,                     -- Responsible department
+  role         TEXT DEFAULT 'Official',           -- Official / Supervisor / Admin
+  zone         TEXT DEFAULT 'Zone A',             -- Assigned city zone
+  phone        TEXT,                              -- Contact phone number
+  active       BOOLEAN DEFAULT TRUE,              -- Employment active status
+  created_at   TIMESTAMPTZ DEFAULT NOW()          -- Account creation timestamp
+);
+
+ALTER TABLE staff_details ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow public read staff"   ON staff_details FOR SELECT USING (true);
+CREATE POLICY "Allow public insert staff" ON staff_details FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update staff" ON staff_details FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete staff" ON staff_details FOR DELETE USING (true);
+
+INSERT INTO staff_details (
+  id, name, email, password, department, role, zone, phone, active
+) VALUES
+('STF-101', 'Ramesh Kumar',  'ramesh.kumar@civicresolve.gov.in',  'HighwaysPass@123',  'Highways & Roads',        'Official',   'Zone A', '+91 9876543210', true),
+('STF-102', 'Suresh Babu',   'suresh.babu@civicresolve.gov.in',   'HighwaysPass@456',  'Highways & Roads',        'Official',   'Zone B', '+91 9876543211', true),
+('STF-103', 'Lakshmi Priya', 'lakshmi.priya@civicresolve.gov.in', 'WaterPass@123',     'Water & Sewerage',        'Official',   'Zone A', '+91 9876543212', true),
+('STF-104', 'Karthik Raja',  'karthik.raja@civicresolve.gov.in',  'WaterPass@456',     'Water & Sewerage',        'Official',   'Zone B', '+91 9876543213', true),
+('STF-105', 'Divya Shree',   'divya.shree@civicresolve.gov.in',   'WastePass@123',     'Solid Waste Management',  'Official',   'Zone A', '+91 9876543214', true),
+('STF-106', 'Mohan Das',     'mohan.das@civicresolve.gov.in',     'WastePass@456',     'Solid Waste Management',  'Official',   'Zone B', '+91 9876543215', true),
+('STF-107', 'Anitha R',      'anitha.r@civicresolve.gov.in',      'ElectricalPass@123','Electrical Department',   'Official',   'Zone A', '+91 9876543216', true),
+('STF-108', 'Vijay Anand',   'vijay.anand@civicresolve.gov.in',   'ElectricalPass@456','Electrical Department',   'Supervisor', 'Zone B', '+91 9876543217', true);
