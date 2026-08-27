@@ -6,6 +6,25 @@
   <title>CivicResolve - Citizen & Municipal Portal</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <style>
+    @keyframes pulse {
+      0% {
+        transform: scale(0.95);
+        opacity: 0.85;
+      }
+      70% {
+        transform: scale(1.1);
+        opacity: 1;
+      }
+      100% {
+        transform: scale(0.95);
+        opacity: 0.85;
+      }
+    }
+  </style>
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col font-sans">
 
@@ -99,12 +118,12 @@
     <!-- 3. ADMIN LOGIN VIEW -->
     <section id="admin-login-view" class="hidden max-w-md mx-auto mt-10 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
       <button onclick="showView('auth-select-view')" class="text-xs text-slate-500 hover:text-slate-800 mb-4 inline-block">&larr; Back</button>
-      <h2 class="text-xl font-bold text-slate-900 mb-1">Municipal Staff Login</h2>
-      <p class="text-xs text-slate-500 mb-6">Select your municipal ward and department.</p>
+      <h2 class="text-xl font-bold text-slate-900 mb-1" id="txt-staff-login-title">Municipal Staff Login</h2>
+      <p class="text-xs text-slate-500 mb-6" id="txt-staff-login-sub">Select your municipal ward and department.</p>
 
       <form onsubmit="handleAdminLogin(event)" class="space-y-4">
         <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Assigned Department</label>
+          <label class="block text-xs font-semibold text-slate-700 mb-1" id="txt-lbl-assigned-dept">Assigned Department</label>
           <select id="admin-dept-select" class="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-800 focus:outline-none bg-white">
             <option value="All">All Municipal Departments (Superadmin)</option>
             <option value="Highways & Roads">Highways & Roads</option>
@@ -114,10 +133,10 @@
           </select>
         </div>
         <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Staff Access Key</label>
+          <label class="block text-xs font-semibold text-slate-700 mb-1" id="txt-lbl-staff-access-key">Staff Access Key</label>
           <input type="password" required value="hackathon2026" class="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-800 focus:outline-none">
         </div>
-        <button type="submit" class="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-medium text-sm rounded-lg shadow transition">
+        <button type="submit" id="txt-btn-open-dashboard" class="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-medium text-sm rounded-lg shadow transition">
           Open Staff Dashboard &rarr;
         </button>
       </form>
@@ -207,51 +226,113 @@
 
     <!-- 5. ADMIN DASHBOARD -->
     <section id="admin-app-view" class="hidden space-y-6">
-      <!-- Admin Top Metrics -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div class="text-xs font-bold text-slate-500 uppercase tracking-wider">Open Tickets</div>
-          <div class="text-2xl font-black text-slate-900 mt-1" id="metric-open-count">0</div>
-          <div class="text-[11px] text-amber-600 mt-0.5">Requiring action</div>
+      <!-- Admin Tabs -->
+      <div class="flex border-b border-slate-200 bg-white rounded-xl px-4 pt-2 shadow-sm">
+        <button onclick="switchAdminTab('queue')" id="admin-tab-btn-queue" class="pb-3 px-4 font-bold text-sm border-b-2 border-indigo-600 text-indigo-600 transition flex items-center gap-2">
+          <i class="fa-solid fa-list-check"></i>
+          <span id="txt-admin-tab-queue">Triage Desk</span>
+        </button>
+        <button onclick="switchAdminTab('map')" id="admin-tab-btn-map" class="pb-3 px-4 font-bold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition flex items-center gap-2">
+          <i class="fa-solid fa-map-location-dot"></i>
+          <span id="txt-admin-tab-map">Live GIS Map</span>
+        </button>
+      </div>
+
+      <!-- Tab 1: Queue -->
+      <div id="admin-tab-queue" class="space-y-6">
+        <!-- Admin Top Metrics -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <div class="text-xs font-bold text-slate-500 uppercase tracking-wider" id="txt-metric-open">Open Tickets</div>
+            <div class="text-2xl font-black text-slate-900 mt-1" id="metric-open-count">0</div>
+            <div class="text-[11px] text-amber-600 mt-0.5" id="txt-metric-open-sub">Requiring action</div>
+          </div>
+          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <div class="text-xs font-bold text-slate-500 uppercase tracking-wider" id="txt-metric-dup">Merged Duplicates</div>
+            <div class="text-2xl font-black text-indigo-600 mt-1" id="metric-duplicates-count">0</div>
+            <div class="text-[11px] text-slate-500 mt-0.5" id="txt-metric-dup-sub">Clustered automatically</div>
+          </div>
+          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <div class="text-xs font-bold text-slate-500 uppercase tracking-wider" id="txt-metric-res">Avg. Resolution</div>
+            <div class="text-2xl font-black text-slate-900 mt-1">3.8 hrs</div>
+            <div class="text-[11px] text-emerald-600 mt-0.5" id="txt-metric-res-sub">Within SLA limits</div>
+          </div>
+          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <div class="text-xs font-bold text-slate-500 uppercase tracking-wider" id="txt-metric-spam">Spam Filtered</div>
+            <div class="text-2xl font-black text-slate-900 mt-1">12</div>
+            <div class="text-[11px] text-slate-500 mt-0.5" id="txt-metric-spam-sub">Blocked before queue</div>
+          </div>
         </div>
-        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div class="text-xs font-bold text-slate-500 uppercase tracking-wider">Merged Duplicates</div>
-          <div class="text-2xl font-black text-indigo-600 mt-1" id="metric-duplicates-count">0</div>
-          <div class="text-[11px] text-slate-500 mt-0.5">Clustered automatically</div>
-        </div>
-        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div class="text-xs font-bold text-slate-500 uppercase tracking-wider">Avg. Resolution</div>
-          <div class="text-2xl font-black text-slate-900 mt-1">3.8 hrs</div>
-          <div class="text-[11px] text-emerald-600 mt-0.5">Within SLA limits</div>
-        </div>
-        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div class="text-xs font-bold text-slate-500 uppercase tracking-wider">Spam Filtered</div>
-          <div class="text-2xl font-black text-slate-900 mt-1">12</div>
-          <div class="text-[11px] text-slate-500 mt-0.5">Blocked before queue</div>
+
+        <!-- Admin Split Queue & Triage Desk -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <!-- Left List Queue -->
+          <div class="lg:col-span-5 space-y-3">
+            <div class="flex items-center justify-between">
+              <h2 class="font-bold text-sm text-slate-800" id="txt-dept-queue">Department Queue</h2>
+              <select id="admin-filter-dept" onchange="fetchAndRenderAdminQueue()" class="text-xs border border-slate-300 rounded-lg px-2.5 py-1 bg-white focus:outline-none">
+                <option value="All">All Departments</option>
+                <option value="Highways & Roads">Highways & Roads</option>
+                <option value="Solid Waste Management">Solid Waste</option>
+                <option value="Electrical Department">Electrical</option>
+                <option value="Water & Sewerage">Water & Sewerage</option>
+              </select>
+            </div>
+            <div id="admin-queue-list" class="space-y-2 max-h-[580px] overflow-y-auto pr-1"></div>
+          </div>
+
+          <!-- Right Ticket Detail & Triage Action -->
+          <div class="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+            <div id="admin-detail-view" class="space-y-4">
+              <p class="text-slate-400 text-sm text-center py-20" id="txt-select-ticket-prompt">Select any ticket from the queue to review and change status.</p>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Admin Split Queue & Triage Desk -->
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <!-- Left List Queue -->
-        <div class="lg:col-span-5 space-y-3">
-          <div class="flex items-center justify-between">
-            <h2 class="font-bold text-sm text-slate-800">Department Queue</h2>
-            <select id="admin-filter-dept" onchange="fetchAndRenderAdminQueue()" class="text-xs border border-slate-300 rounded-lg px-2.5 py-1 bg-white focus:outline-none">
-              <option value="All">All Departments</option>
-              <option value="Highways & Roads">Highways & Roads</option>
-              <option value="Solid Waste Management">Solid Waste</option>
-              <option value="Electrical Department">Electrical</option>
-              <option value="Water & Sewerage">Water & Sewerage</option>
-            </select>
+      <!-- Tab 2: Map -->
+      <div id="admin-tab-map" class="hidden space-y-4">
+        <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
+          <div>
+            <h2 class="font-extrabold text-lg text-slate-900 flex items-center gap-2">
+              <i class="fa-solid fa-map-location-dot text-indigo-600"></i>
+              <span id="txt-gis-map-title">Live GIS Map & Proximity Check</span>
+            </h2>
+            <p class="text-xs text-slate-500 mt-1" id="txt-gis-map-subtitle">Click on the map to pin complaint coordinates or view nearby active issues.</p>
           </div>
-          <div id="admin-queue-list" class="space-y-2 max-h-[580px] overflow-y-auto pr-1"></div>
-        </div>
-
-        <!-- Right Ticket Detail & Triage Action -->
-        <div class="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-          <div id="admin-detail-view" class="space-y-4">
-            <p class="text-slate-400 text-sm text-center py-20">Select any ticket from the queue to review and change status.</p>
+          
+          <!-- Map Container -->
+          <div id="gis-map" class="w-full h-[500px] rounded-lg border border-slate-200 z-10"></div>
+          
+          <!-- Proximity Check Section -->
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-4 pt-2">
+            <div class="md:col-span-4 bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+              <h3 class="font-bold text-xs text-slate-700 uppercase tracking-wider" id="txt-proximity-desk-title">Proximity Triage Desk</h3>
+              <div class="space-y-2.5">
+                <div>
+                  <label class="block text-[11px] font-semibold text-slate-500 mb-1" id="txt-lbl-radius">Search Radius</label>
+                  <select id="proximity-radius" onchange="performProximitySearch()" class="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white">
+                    <option value="1">1 km</option>
+                    <option value="3" selected>3 km</option>
+                    <option value="5">5 km</option>
+                    <option value="10">10 km</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-semibold text-slate-500 mb-1" id="txt-lbl-coords">Click coordinates or select report</label>
+                  <div class="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-600 truncate" id="proximity-coords">
+                    No coordinates pinned.
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="md:col-span-8 bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col justify-between">
+              <h3 class="font-bold text-xs text-slate-700 uppercase tracking-wider mb-2" id="txt-nearby-issues-title">Nearby Issues (Duplicates/Clusters)</h3>
+              <div id="proximity-results" class="space-y-2 overflow-y-auto max-h-[140px] text-xs text-slate-500">
+                Pin a location or select a ticket to search for duplicates in the area.
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -291,7 +372,46 @@
         recording: "Listening...",
         lblLoc: "3. Incident Location (GPS)",
         btnSubmit: "Submit Civic Report",
-        offline: "You are offline. Reports will queue and sync when connected."
+        offline: "You are offline. Reports will queue and sync when connected.",
+        metricOpen: "Open Tickets",
+        metricOpenSub: "Requiring action",
+        metricDup: "Merged Duplicates",
+        metricDupSub: "Clustered automatically",
+        metricRes: "Avg. Resolution",
+        metricResSub: "Within SLA limits",
+        metricSpam: "Spam Filtered",
+        metricSpamSub: "Blocked before queue",
+        deptQueue: "Department Queue",
+        descHeading: "Citizen Description",
+        updateStatus: "Update Ticket Status",
+        setStatus: "Set: ",
+        statusPending: "Pending",
+        statusAssigned: "Assigned",
+        statusInProgress: "In Progress",
+        statusResolved: "Resolved",
+        selectTicketPrompt: "Select any ticket from the queue to review and change status.",
+        noTickets: "No tickets found in this department queue.",
+        deptAll: "All Departments",
+        deptAllSuper: "All Municipal Departments (Superadmin)",
+        deptHighways: "Highways & Roads",
+        deptSolidWaste: "Solid Waste",
+        deptElectrical: "Electrical",
+        deptWater: "Water & Sewerage",
+        staffLoginTitle: "Municipal Staff Login",
+        staffLoginSub: "Select your municipal ward and department.",
+        lblAssignedDept: "Assigned Department",
+        lblStaffAccessKey: "Staff Access Key",
+        btnOpenDashboard: "Open Staff Dashboard →",
+        adminTabQueue: "Triage Desk",
+        adminTabMap: "Live GIS Map",
+        gisMapTitle: "Live GIS Map & Proximity Check",
+        gisMapSubtitle: "Click on the map to pin complaint coordinates or view nearby active issues.",
+        proximityDeskTitle: "Proximity Triage Desk",
+        lblRadius: "Search Radius",
+        lblCoords: "Click coordinates or select report",
+        nearbyIssuesTitle: "Nearby Issues (Duplicates/Clusters)",
+        noCoordsText: "No coordinates pinned.",
+        nearbyPromptText: "Pin a location or select a ticket to search for duplicates in the area."
       },
       ta: {
         title: "மக்கள் சேவை",
@@ -310,7 +430,46 @@
         recording: "கேட்கிறது...",
         lblLoc: "3. இருக்கும் இடம் (GPS)",
         btnSubmit: "புகாரை சமர்ப்பிக்கவும்",
-        offline: "இணைய இணைப்பு இல்லை. இணைப்பு வந்ததும் பதிவேற்றப்படும்."
+        offline: "இணைய இணைப்பு இல்லை. இணைப்பு வந்ததும் பதிவேற்றப்படும்.",
+        metricOpen: "திறந்த புகார்கள்",
+        metricOpenSub: "நடவடிக்கை தேவை",
+        metricDup: "இணைக்கப்பட்ட நகல்கள்",
+        metricDupSub: "தானியங்கி தொகுப்பு",
+        metricRes: "சராசரி தீர்வு நேரம்",
+        metricResSub: "வரம்பிற்குள்",
+        metricSpam: "தேவையற்றவை நீக்கம்",
+        metricSpamSub: "முன்பே தடுக்கப்பட்டது",
+        deptQueue: "துறை வாரியான வரிசை",
+        descHeading: "பொதுமக்கள் விளக்கம்",
+        updateStatus: "நிலை மாற்றம்",
+        setStatus: "மாற்றுக: ",
+        statusPending: "நிலுவையில்",
+        statusAssigned: "ஒதுக்கப்பட்டது",
+        statusInProgress: "செயல்பாட்டில்",
+        statusResolved: "தீர்க்கப்பட்டது",
+        selectTicketPrompt: "மதிப்பாய்வு செய்ய மற்றும் நிலையை மாற்ற வரிசையிலிருந்து ஏதேனும் புகாரைத் தேர்ந்தெடுக்கவும்.",
+        noTickets: "இந்தத் துறை வரிசையில் புகார்கள் எதுவும் இல்லை.",
+        deptAll: "அனைத்து துறைகளும்",
+        deptAllSuper: "அனைத்து நகராட்சி துறைகளும் (Superadmin)",
+        deptHighways: "நெடுஞ்சாலைகள் & சாலைகள்",
+        deptSolidWaste: "திடக்கழிவு மேலாண்மை",
+        deptElectrical: "மின்சார துறை",
+        deptWater: "நீர் & கழிவுநீர்",
+        staffLoginTitle: "அதிகாரிகள் உள்நுழைவு",
+        staffLoginSub: "உங்கள் வார்டு மற்றும் துறையை தேர்வு செய்யவும்.",
+        lblAssignedDept: "ஒதுக்கப்பட்ட துறை",
+        lblStaffAccessKey: "அணுகல் குறியீடு",
+        btnOpenDashboard: "டேஷ்போர்டை திறக்கவும் →",
+        adminTabQueue: "பணி மேலாண்மை",
+        adminTabMap: "நேரடி வரைபடம்",
+        gisMapTitle: "நேரடி வரைபடம் & அருகாமை பகுப்பாய்வு",
+        gisMapSubtitle: "வரைபடத்தில் உள்ள புகாரைக் காண அல்லது அருகில் உள்ள புகார்களைப் பார்க்க வரைபடத்தில் கிளிக் செய்க.",
+        proximityDeskTitle: "அருகாமை பகுப்பாய்வு மையம்",
+        lblRadius: "தேடல் ஆரம்",
+        lblCoords: "வரைபடத்தில் கிளிக் செய்யவும் அல்லது புகாரைத் தேர்ந்தெடுக்கவும்",
+        nearbyIssuesTitle: "அருகிலுள்ள புகார்கள் (நகல்கள்/தொகுப்புகள்)",
+        noCoordsText: "வரைபடத்தில் இடம் குறிக்கப்படவில்லை.",
+        nearbyPromptText: "இப்பகுதியில் உள்ள நகல் புகார்களைக் கண்டறிய வரைபடத்தில் குறிக்கவும் அல்லது புகாரைத் தேர்ந்தெடுக்கவும்."
       },
       hi: {
         title: "नागरिक समाधान",
@@ -329,7 +488,109 @@
         recording: "सुन रहे हैं...",
         lblLoc: "3. समस्या का स्थान (GPS)",
         btnSubmit: "शिकायत दर्ज करें",
-        offline: "आप ऑफ़लाइन हैं। नेटवर्क आने पर रिपोर्ट भेजी जाएगी।"
+        offline: "आप ऑफ़लाइन हैं। नेटवर्क आने पर रिपोर्ट भेजी जाएगी।",
+        metricOpen: "खुले टिकट",
+        metricOpenSub: "कार्रवाई आवश्यक",
+        metricDup: "संबद्ध डुप्लिकेट",
+        metricDupSub: "स्वचालित रूप से समूहीकृत",
+        metricRes: "औसत समाधान समय",
+        metricResSub: "SLA सीमा के भीतर",
+        metricSpam: "स्पैम फ़िल्टर किया गया",
+        metricSpamSub: "कतार से पहले अवरुद्ध",
+        deptQueue: "विभागीय कतार",
+        descHeading: "नागरिक विवरण",
+        updateStatus: "टिकट की स्थिति अपडेट करें",
+        setStatus: "सेट करें: ",
+        statusPending: "लंबित",
+        statusAssigned: "सौंपा गया",
+        statusInProgress: "प्रगति पर",
+        statusResolved: "हल हो गया",
+        selectTicketPrompt: "समीक्षा और स्थिति बदलने के लिए कतार से किसी भी टिकट का चयन करें।",
+        noTickets: "इस विभागीय कतार में कोई टिकट नहीं मिला।",
+        deptAll: "सभी विभाग",
+        deptAllSuper: "सभी नगर निगम विभाग (Superadmin)",
+        deptHighways: "राजमार्ग और सड़कें",
+        deptSolidWaste: "ठोस कचरा प्रबंधन",
+        deptElectrical: "विद्युत विभाग",
+        deptWater: "जल और जल निकासी",
+        staffLoginTitle: "नगर निगम लॉगिन",
+        staffLoginSub: "अपने नगर निगम वार्ड और विभाग का चयन करें।",
+        lblAssignedDept: "सौंपा गया विभाग",
+        lblStaffAccessKey: "कर्मचारी एक्सेस कुंजी",
+        btnOpenDashboard: "डैशबोर्ड खोलें →",
+        adminTabQueue: "तैयारी डेस्क",
+        adminTabMap: "लाइव मानचित्र",
+        gisMapTitle: "लाइव जीआईएस मानचित्र और निकटता जांच",
+        gisMapSubtitle: "शिकायत निर्देशांक पिन करने या आस-पास की सक्रिय समस्याओं को देखने के लिए मानचित्र पर क्लिक करें।",
+        proximityDeskTitle: "निकटता तैयारी डेस्क",
+        lblRadius: "खोज त्रिज्या",
+        lblCoords: "निर्देशांक पर क्लिक करें या रिपोर्ट का चयन करें",
+        nearbyIssuesTitle: "आस-पास की समस्याएं (डुप्लिकेट/समूह)",
+        noCoordsText: "कोई निर्देशांक पिन नहीं किया गया है।",
+        nearbyPromptText: "क्षेत्र में डुप्लिकेट खोजने के लिए कोई स्थान पिन करें या टिकट का चयन करें।"
+      }
+    };
+
+    const categoriesTranslations = {
+      en: {
+        "Pothole & Surface Damage": "Pothole & Surface Damage",
+        "Pothole / Road Hazard": "Pothole / Road Hazard",
+        "Garbage Overflow": "Garbage Overflow",
+        "Broken Streetlight": "Broken Streetlight"
+      },
+      ta: {
+        "Pothole & Surface Damage": "சாலை பள்ளம் & மேற்பரப்பு சேதம்",
+        "Pothole / Road Hazard": "சாலை பள்ளம் / சாலை ஆபத்து",
+        "Garbage Overflow": "குப்பை குவிதல்",
+        "Broken Streetlight": "பழுதடைந்த தெருவிளக்கு"
+      },
+      hi: {
+        "Pothole & Surface Damage": "गड्ढा और सड़क सतह की क्षति",
+        "Pothole / Road Hazard": "गड्ढा / सड़क का खतरा",
+        "Garbage Overflow": "कचरा अतिप्रवाह",
+        "Broken Streetlight": "टूटी स्ट्रीट लाइट"
+      }
+    };
+
+    const departmentsTranslations = {
+      en: {
+        "Highways & Roads": "Highways & Roads",
+        "Solid Waste Management": "Solid Waste Management",
+        "Electrical Department": "Electrical Department",
+        "Water & Sewerage": "Water & Sewerage"
+      },
+      ta: {
+        "Highways & Roads": "நெடுஞ்சாலைகள் & சாலைகள்",
+        "Solid Waste Management": "திடக்கழிவு மேலாண்மை",
+        "Electrical Department": "மின்சார துறை",
+        "Water & Sewerage": "நீர் & கழிவுநீர்"
+      },
+      hi: {
+        "Highways & Roads": "राजमार्ग और सड़कें",
+        "Solid Waste Management": "ठोस कचरा प्रबंधन",
+        "Electrical Department": "विद्युत विभाग",
+        "Water & Sewerage": "जल और जल निकासी"
+      }
+    };
+
+    const statusTranslations = {
+      en: {
+        "Pending": "Pending",
+        "Assigned": "Assigned",
+        "In Progress": "In Progress",
+        "Resolved": "Resolved"
+      },
+      ta: {
+        "Pending": "நிலுவையில்",
+        "Assigned": "ஒதுக்கப்பட்டது",
+        "In Progress": "செயல்பாட்டில்",
+        "Resolved": "தீர்க்கப்பட்டது"
+      },
+      hi: {
+        "Pending": "लंबित",
+        "Assigned": "सौंपा गया",
+        "In Progress": "प्रगति पर",
+        "Resolved": "हल हो गया"
       }
     };
 
@@ -602,6 +863,93 @@
       document.getElementById('txt-lbl-loc').innerText = dict.lblLoc;
       document.getElementById('txt-btn-submit').innerText = dict.btnSubmit;
       document.getElementById('txt-offline').innerText = dict.offline;
+
+      // Staff Login translation
+      const txtStaffLoginTitle = document.getElementById('txt-staff-login-title');
+      if (txtStaffLoginTitle) txtStaffLoginTitle.innerText = dict.staffLoginTitle;
+      const txtStaffLoginSub = document.getElementById('txt-staff-login-sub');
+      if (txtStaffLoginSub) txtStaffLoginSub.innerText = dict.staffLoginSub;
+      const txtLblAssignedDept = document.getElementById('txt-lbl-assigned-dept');
+      if (txtLblAssignedDept) txtLblAssignedDept.innerText = dict.lblAssignedDept;
+      const txtLblStaffAccessKey = document.getElementById('txt-lbl-staff-access-key');
+      if (txtLblStaffAccessKey) txtLblStaffAccessKey.innerText = dict.lblStaffAccessKey;
+      const txtBtnOpenDashboard = document.getElementById('txt-btn-open-dashboard');
+      if (txtBtnOpenDashboard) txtBtnOpenDashboard.innerText = dict.btnOpenDashboard;
+
+      // Dropdowns
+      const deptSelect = document.getElementById('admin-dept-select');
+      if (deptSelect) {
+        deptSelect.options[0].text = dict.deptAllSuper;
+        deptSelect.options[1].text = dict.deptHighways;
+        deptSelect.options[2].text = dict.deptSolidWaste;
+        deptSelect.options[3].text = dict.deptElectrical;
+        deptSelect.options[4].text = dict.deptWater;
+      }
+      const filterSelect = document.getElementById('admin-filter-dept');
+      if (filterSelect) {
+        filterSelect.options[0].text = dict.deptAll;
+        filterSelect.options[1].text = dict.deptHighways;
+        filterSelect.options[2].text = dict.deptSolidWaste;
+        filterSelect.options[3].text = dict.deptElectrical;
+        filterSelect.options[4].text = dict.deptWater;
+      }
+
+      // Admin Dashboard translation
+      const txtMetricOpen = document.getElementById('txt-metric-open');
+      if (txtMetricOpen) txtMetricOpen.innerText = dict.metricOpen;
+      const txtMetricOpenSub = document.getElementById('txt-metric-open-sub');
+      if (txtMetricOpenSub) txtMetricOpenSub.innerText = dict.metricOpenSub;
+      const txtMetricDup = document.getElementById('txt-metric-dup');
+      if (txtMetricDup) txtMetricDup.innerText = dict.metricDup;
+      const txtMetricDupSub = document.getElementById('txt-metric-dup-sub');
+      if (txtMetricDupSub) txtMetricDupSub.innerText = dict.metricDupSub;
+      const txtMetricRes = document.getElementById('txt-metric-res');
+      if (txtMetricRes) txtMetricRes.innerText = dict.metricRes;
+      const txtMetricResSub = document.getElementById('txt-metric-res-sub');
+      if (txtMetricResSub) txtMetricResSub.innerText = dict.metricResSub;
+      const txtMetricSpam = document.getElementById('txt-metric-spam');
+      if (txtMetricSpam) txtMetricSpam.innerText = dict.metricSpam;
+      const txtMetricSpamSub = document.getElementById('txt-metric-spam-sub');
+      if (txtMetricSpamSub) txtMetricSpamSub.innerText = dict.metricSpamSub;
+      const txtDeptQueue = document.getElementById('txt-dept-queue');
+      if (txtDeptQueue) txtDeptQueue.innerText = dict.deptQueue;
+
+      const txtSelectTicketPrompt = document.getElementById('txt-select-ticket-prompt');
+      if (txtSelectTicketPrompt) txtSelectTicketPrompt.innerText = dict.selectTicketPrompt;
+
+      // New Admin Tab translations
+      const txtAdminTabQueue = document.getElementById('txt-admin-tab-queue');
+      if (txtAdminTabQueue) txtAdminTabQueue.innerText = dict.adminTabQueue;
+      const txtAdminTabMap = document.getElementById('txt-admin-tab-map');
+      if (txtAdminTabMap) txtAdminTabMap.innerText = dict.adminTabMap;
+      const txtGisMapTitle = document.getElementById('txt-gis-map-title');
+      if (txtGisMapTitle) txtGisMapTitle.innerText = dict.gisMapTitle;
+      const txtGisMapSubtitle = document.getElementById('txt-gis-map-subtitle');
+      if (txtGisMapSubtitle) txtGisMapSubtitle.innerText = dict.gisMapSubtitle;
+      const txtProximityDeskTitle = document.getElementById('txt-proximity-desk-title');
+      if (txtProximityDeskTitle) txtProximityDeskTitle.innerText = dict.proximityDeskTitle;
+      const txtLblRadius = document.getElementById('txt-lbl-radius');
+      if (txtLblRadius) txtLblRadius.innerText = dict.lblRadius;
+      const txtLblCoords = document.getElementById('txt-lbl-coords');
+      if (txtLblCoords) txtLblCoords.innerText = dict.lblCoords;
+      const txtNearbyIssuesTitle = document.getElementById('txt-nearby-issues-title');
+      if (txtNearbyIssuesTitle) txtNearbyIssuesTitle.innerText = dict.nearbyIssuesTitle;
+
+      // Refresh proximity text if no coords are set
+      const coordsDiv = document.getElementById('proximity-coords');
+      if (coordsDiv && (coordsDiv.innerText.includes('No coordinates') || coordsDiv.innerText.includes('குறிக்கப்படவில்லை') || coordsDiv.innerText.includes('निर्देशांक पिन'))) {
+        coordsDiv.innerText = dict.noCoordsText;
+      }
+
+      // Re-render components to reflect translation updates in dynamic areas
+      if (currentRole === 'admin-app-view') {
+        renderAdminQueue();
+        if (leafletMap) {
+          renderMapMarkers();
+        }
+      } else if (currentRole === 'citizen-app-view') {
+        renderCitizenReports();
+      }
     }
 
     // --- Web Speech API (Voice-to-Text) with Enhanced Accuracy ---
@@ -807,6 +1155,18 @@
       }
     }
 
+    // --- Severity Color Helper ---
+    function getSeverityColor(severity) {
+      const colors = {
+        1: { hex: '#10b981', rgb: '16, 185, 129', bg: 'bg-emerald-50/50', text: 'text-emerald-700', badgeBg: 'bg-emerald-100 text-emerald-800 border-emerald-200', label: 'Low' },
+        2: { hex: '#84cc16', rgb: '132, 204, 22', bg: 'bg-lime-50/30', text: 'text-lime-700', badgeBg: 'bg-lime-100 text-lime-800 border-lime-200', label: 'Moderate' },
+        3: { hex: '#f59e0b', rgb: '245, 158, 11', bg: 'bg-amber-50/30', text: 'text-amber-700', badgeBg: 'bg-amber-100 text-amber-800 border-amber-200', label: 'Medium' },
+        4: { hex: '#f97316', rgb: '249, 115, 22', bg: 'bg-orange-50/30', text: 'text-orange-700', badgeBg: 'bg-orange-100 text-orange-800 border-orange-200', label: 'High' },
+        5: { hex: '#ef4444', rgb: '239, 68, 68', bg: 'bg-rose-50/40', text: 'text-rose-700', badgeBg: 'bg-rose-100 text-rose-800 border-rose-200', label: 'Critical' }
+      };
+      return colors[severity] || colors[3];
+    }
+
     // --- Render Citizen Reports ---
     function renderCitizenReports() {
       const container = document.getElementById('citizen-tab-my');
@@ -825,16 +1185,30 @@
         const statusSteps = ['Pending', 'Assigned', 'In Progress', 'Resolved'];
         const currentStepIndex = statusSteps.indexOf(rep.status);
 
+        const sevColor = getSeverityColor(rep.severity || 3);
+        const displayCategory = (categoriesTranslations[currentLang] && categoriesTranslations[currentLang][rep.category]) || rep.category;
+        const displayDept = (departmentsTranslations[currentLang] && departmentsTranslations[currentLang][rep.department]) || rep.department;
+        const displayStatus = (statusTranslations[currentLang] && statusTranslations[currentLang][rep.status]) || rep.status;
+
         const card = document.createElement('div');
-        card.className = "bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between";
+        card.className = "bg-white p-5 rounded-xl border flex flex-col justify-between transition-all duration-300";
+        card.style.borderColor = `rgba(${sevColor.rgb}, 0.35)`;
+        card.style.boxShadow = `0 2px 4px rgba(0,0,0,0.01), 0 0 8px rgba(${sevColor.rgb}, 0.12)`;
+
         card.innerHTML = `
           <div>
             <div class="flex items-start justify-between gap-2 mb-2">
               <div>
                 <span class="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">${rep.id}</span>
-                <h3 class="font-bold text-slate-900 mt-1 text-sm">${rep.category}</h3>
+                <h3 class="font-bold text-slate-900 mt-1 text-sm">${displayCategory}</h3>
               </div>
-              <span class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${badgeClasses}">${rep.status}</span>
+              <div class="flex flex-col items-end gap-1">
+                <span class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${badgeClasses}">${displayStatus}</span>
+                <div class="flex items-center gap-1.5">
+                  <span class="w-5 h-2 rounded-full border border-black/10 inline-block shadow-sm" style="background-color: ${sevColor.hex};"></span>
+                  <span class="text-[9px] font-bold px-1.5 py-0.5 rounded border ${sevColor.badgeBg}">Sev ${rep.severity}/5</span>
+                </div>
+              </div>
             </div>
             
             <p class="text-xs text-slate-600 mb-3">${rep.description}</p>
@@ -845,7 +1219,7 @@
             </div>
             
             <div class="text-[11px] text-slate-400 mb-4">
-              Dept: <b class="text-slate-700">${rep.department}</b> • ${rep.timestamp}
+              Dept: <b class="text-slate-700">${displayDept}</b> • ${rep.timestamp}
             </div>
 
             <!-- Resolution Status Roadmap -->
@@ -872,12 +1246,14 @@
                     icon = 'fa-spinner fa-spin';
                   }
 
+                  const translatedStep = (statusTranslations[currentLang] && statusTranslations[currentLang][step]) || step;
+
                   return `
                     <div class="flex flex-col items-center z-10 relative">
                       <div class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${circleBg}">
                         <i class="fa-solid ${icon}"></i>
                       </div>
-                      <span class="text-[9px] mt-1.5 ${textColor} text-center whitespace-nowrap">${step}</span>
+                      <span class="text-[9px] mt-1.5 ${textColor} text-center whitespace-nowrap">${translatedStep}</span>
                     </div>
                   `;
                 }).join('')}
@@ -928,19 +1304,40 @@
 
       filtered.forEach(rep => {
         const isSelected = selectedTicketId === rep.id;
+        const sevColor = getSeverityColor(rep.severity);
         const item = document.createElement('div');
-        item.className = `p-3.5 rounded-xl border cursor-pointer transition ${isSelected ? 'border-indigo-600 bg-indigo-50/50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'}`;
+
+        let borderStyle = '';
+        let boxShadowStyle = '';
+        let bgClass = '';
+
+        if (isSelected) {
+          borderStyle = `2px solid ${sevColor.hex}`;
+          boxShadowStyle = `0 0 14px rgba(${sevColor.rgb}, 0.55), inset 0 0 6px rgba(${sevColor.rgb}, 0.15)`;
+          bgClass = `${sevColor.bg} font-medium`;
+        } else {
+          borderStyle = `1px solid rgba(${sevColor.rgb}, 0.35)`;
+          boxShadowStyle = `0 2px 4px rgba(0,0,0,0.02), 0 0 8px rgba(${sevColor.rgb}, 0.12)`;
+          bgClass = `bg-white hover:${sevColor.bg}`;
+        }
+
+        item.className = `p-3.5 rounded-xl cursor-pointer transition-all duration-300 ${bgClass}`;
+        item.style.border = borderStyle;
+        item.style.boxShadow = boxShadowStyle;
         item.onclick = () => { selectedTicketId = rep.id; renderAdminQueue(); };
+
+        const displayCategory = (categoriesTranslations[currentLang] && categoriesTranslations[currentLang][rep.category]) || rep.category;
 
         item.innerHTML = `
           <div class="flex items-center justify-between mb-1">
             <span class="text-xs font-mono font-bold text-slate-700">${rep.id}</span>
             <div class="flex items-center gap-1.5">
               ${rep.duplicatesCount > 1 ? `<span class="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">+${rep.duplicatesCount} clustered</span>` : ''}
-              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${rep.severity >= 4 ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-700'}">Sev ${rep.severity}/5</span>
+              <span class="w-5 h-2 rounded-full border border-black/10 inline-block shadow-sm" style="background-color: ${sevColor.hex};"></span>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded border ${sevColor.badgeBg}">Sev ${rep.severity}/5</span>
             </div>
           </div>
-          <div class="font-bold text-sm text-slate-900">${rep.category}</div>
+          <div class="font-bold text-sm text-slate-900">${displayCategory}</div>
           <div class="text-xs text-slate-500 truncate mt-0.5">${rep.location}</div>
         `;
         listContainer.appendChild(item);
@@ -954,8 +1351,22 @@
       const ticket = civicReports.find(r => r.id === selectedTicketId) || civicReports[0];
 
       if (!ticket) {
-        container.innerHTML = `<p class="text-slate-400 text-sm text-center py-20">No tickets found in this department queue.</p>`;
+        container.innerHTML = `<p class="text-slate-400 text-sm text-center py-20">${i18n[currentLang].noTickets}</p>`;
+        const parentCard = container.parentElement;
+        if (parentCard) {
+          parentCard.style.border = '1px solid #e2e8f0';
+          parentCard.style.boxShadow = 'none';
+        }
         return;
+      }
+
+      // Add a matching glowing border to the admin details card container
+      const parentCard = container.parentElement;
+      if (parentCard) {
+        const sevColor = getSeverityColor(ticket.severity);
+        parentCard.style.border = `2px solid ${sevColor.hex}`;
+        parentCard.style.boxShadow = `0 0 16px rgba(${sevColor.rgb}, 0.25)`;
+        parentCard.style.transition = 'all 0.3s ease';
       }
 
       const badgeClasses = {
@@ -965,13 +1376,21 @@
         'Resolved': 'bg-emerald-100 text-emerald-800 border-emerald-200'
       }[ticket.status] || 'bg-slate-100 text-slate-800 border-slate-200';
 
+      const sevColor = getSeverityColor(ticket.severity);
+      const displayCategory = (categoriesTranslations[currentLang] && categoriesTranslations[currentLang][ticket.category]) || ticket.category;
+      const displayDept = (departmentsTranslations[currentLang] && departmentsTranslations[currentLang][ticket.department]) || ticket.department;
+      const displayStatus = (statusTranslations[currentLang] && statusTranslations[currentLang][ticket.status]) || ticket.status;
+
       container.innerHTML = `
         <div class="flex items-center justify-between border-b pb-3">
           <div>
-            <h3 class="text-lg font-bold text-slate-900">${ticket.category}</h3>
-            <div class="text-xs text-slate-500">Ticket: <span class="font-mono font-bold">${ticket.id}</span> • Assigned: <b>${ticket.department}</b></div>
+            <h3 class="text-lg font-bold text-slate-900">${displayCategory}</h3>
+            <div class="text-xs text-slate-500">Ticket: <span class="font-mono font-bold">${ticket.id}</span> • Assigned: <b>${displayDept}</b></div>
           </div>
-          <span class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${badgeClasses}">${ticket.status}</span>
+          <div class="flex items-center gap-2">
+            <span class="w-5 h-2 rounded-full border border-black/10 inline-block shadow-sm" style="background-color: ${sevColor.hex};"></span>
+            <span class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${badgeClasses}">${displayStatus}</span>
+          </div>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
@@ -992,18 +1411,21 @@
         </div>
 
         <div>
-          <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Citizen Description</div>
+          <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">${i18n[currentLang].descHeading}</div>
           <div class="text-xs text-slate-800 bg-slate-50 p-3 rounded-lg border border-slate-200">${ticket.description}</div>
         </div>
 
         <div class="pt-2">
-          <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Update Ticket Status</div>
+          <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">${i18n[currentLang].updateStatus}</div>
           <div class="grid grid-cols-3 gap-2">
-            ${['Assigned', 'In Progress', 'Resolved'].map(st => `
-              <button onclick="updateTicketStatus('${ticket.id}', '${st}')" class="py-2 text-xs font-semibold rounded-lg border transition ${ticket.status === st ? 'bg-slate-900 text-white border-slate-900' : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'}">
-                Set: ${st}
-              </button>
-            `).join('')}
+            ${['Assigned', 'In Progress', 'Resolved'].map(st => {
+              const statusLabel = (statusTranslations[currentLang] && statusTranslations[currentLang][st]) || st;
+              return `
+                <button onclick="updateTicketStatus('${ticket.id}', '${st}')" class="py-2 text-xs font-semibold rounded-lg border transition ${ticket.status === st ? 'bg-slate-900 text-white border-slate-900' : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'}">
+                  ${i18n[currentLang].setStatus}${statusLabel}
+                </button>
+              `;
+            }).join('')}
           </div>
         </div>
       `;
@@ -1026,6 +1448,202 @@
       } catch (err) {
         console.error('Error updating status:', err);
       }
+    }
+
+    // --- Admin Dashboard Tabs & Map Support ---
+    let leafletMap = null;
+    let markerGroup = null;
+    let selectedMapMarker = null;
+
+    function switchAdminTab(tab) {
+      const tabQueue = document.getElementById('admin-tab-queue');
+      const tabMap = document.getElementById('admin-tab-map');
+      const btnQueue = document.getElementById('admin-tab-btn-queue');
+      const btnMap = document.getElementById('admin-tab-btn-map');
+
+      if (tab === 'queue') {
+        tabQueue.classList.remove('hidden');
+        tabMap.classList.add('hidden');
+        btnQueue.className = 'pb-3 px-4 font-bold text-sm border-b-2 border-indigo-600 text-indigo-600 transition flex items-center gap-2';
+        btnMap.className = 'pb-3 px-4 font-bold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition flex items-center gap-2';
+      } else {
+        tabQueue.classList.add('hidden');
+        tabMap.classList.remove('hidden');
+        btnMap.className = 'pb-3 px-4 font-bold text-sm border-b-2 border-indigo-600 text-indigo-600 transition flex items-center gap-2';
+        btnQueue.className = 'pb-3 px-4 font-bold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition flex items-center gap-2';
+        
+        // Initialize map
+        setTimeout(() => {
+          initGISMap();
+        }, 100);
+      }
+    }
+
+    function initGISMap() {
+      if (!leafletMap) {
+        const centerLat = civicReports.length > 0 ? civicReports[0].lat : 13.0827;
+        const centerLng = civicReports.length > 0 ? civicReports[0].lng : 80.2707;
+        
+        leafletMap = L.map('gis-map').setView([centerLat, centerLng], 12);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(leafletMap);
+        
+        markerGroup = L.layerGroup().addTo(leafletMap);
+        
+        // Map Click Listener to pin custom coordinates
+        leafletMap.on('click', (e) => {
+          const lat = e.latlng.lat.toFixed(6);
+          const lng = e.latlng.lng.toFixed(6);
+          document.getElementById('proximity-coords').innerText = `Lat: ${lat}, Lng: ${lng}`;
+          
+          if (selectedMapMarker) {
+            leafletMap.removeLayer(selectedMapMarker);
+          }
+          selectedMapMarker = L.marker([lat, lng], {
+            icon: L.divIcon({
+              className: 'custom-div-icon',
+              html: `<div style="background-color: #4f46e5; width: 12px; height: 12px; border-radius: 50%; border: 2px white solid; box-shadow: 0 0 8px #4f46e5;"></div>`,
+              iconSize: [12, 12],
+              iconAnchor: [6, 6]
+            })
+          }).addTo(leafletMap);
+          
+          performProximitySearch(lat, lng);
+        });
+      } else {
+        leafletMap.invalidateSize();
+      }
+      
+      renderMapMarkers();
+      
+      // Auto Proximity Search based on selected ticket when first opening map
+      performProximitySearch();
+    }
+
+    function renderMapMarkers() {
+      if (!markerGroup) return;
+      markerGroup.clearLayers();
+      
+      civicReports.forEach(rep => {
+        const sevColor = getSeverityColor(rep.severity);
+        const markerColor = sevColor.hex;
+        
+        const marker = L.marker([rep.lat, rep.lng], {
+          icon: L.divIcon({
+            className: 'custom-div-icon',
+            html: `<div style="background-color: ${markerColor}; width: 16px; height: 16px; border-radius: 50%; border: 2.5px white solid; box-shadow: 0 0 10px ${markerColor}; animation: pulse 2s infinite;"></div>`,
+            iconSize: [16, 16],
+            iconAnchor: [8, 8]
+          })
+        });
+        
+        const displayCategory = (categoriesTranslations[currentLang] && categoriesTranslations[currentLang][rep.category]) || rep.category;
+        const displayStatus = (statusTranslations[currentLang] && statusTranslations[currentLang][rep.status]) || rep.status;
+        
+        const popupHTML = `
+          <div class="p-1 space-y-1.5 font-sans" style="min-width: 180px;">
+            <div class="flex justify-between items-center">
+              <span class="text-[10px] font-mono font-bold text-slate-500">${rep.id}</span>
+              <span class="text-[9px] font-bold px-1.5 py-0.2 rounded border" style="background-color: ${sevColor.hex}15; color: ${sevColor.hex}; border-color: ${sevColor.hex}30;">Sev ${rep.severity}/5</span>
+            </div>
+            <div class="font-bold text-xs text-slate-800">${displayCategory}</div>
+            <div class="text-[10px] text-slate-500 line-clamp-2">${rep.description}</div>
+            <div class="flex justify-between items-center pt-1 border-t text-[9px] text-slate-400">
+              <span>Status: <b class="text-slate-600">${displayStatus}</b></span>
+              <button onclick="selectTicketFromMap('${rep.id}')" class="px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-200 rounded font-semibold transition">View</button>
+            </div>
+          </div>
+        `;
+        
+        marker.bindPopup(popupHTML);
+        markerGroup.addLayer(marker);
+      });
+    }
+
+    function selectTicketFromMap(id) {
+      selectedTicketId = id;
+      switchAdminTab('queue');
+      renderAdminQueue();
+    }
+
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371; // Radius of the earth in km
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      const d = R * c; 
+      return d;
+    }
+
+    function performProximitySearch(searchLat, searchLng) {
+      const radius = parseFloat(document.getElementById('proximity-radius').value || 3);
+      
+      let lat = parseFloat(searchLat);
+      let lng = parseFloat(searchLng);
+      
+      if (isNaN(lat) || isNaN(lng)) {
+        const ticket = civicReports.find(r => r.id === selectedTicketId) || civicReports[0];
+        if (ticket) {
+          lat = ticket.lat;
+          lng = ticket.lng;
+          document.getElementById('proximity-coords').innerText = `Ticket ${ticket.id}: (${lat.toFixed(6)}, ${lng.toFixed(6)})`;
+        } else {
+          document.getElementById('proximity-results').innerHTML = `<p class="text-xs text-slate-400">Please select a ticket or click the map.</p>`;
+          return;
+        }
+      }
+      
+      const resultsContainer = document.getElementById('proximity-results');
+      resultsContainer.innerHTML = '';
+      
+      const nearby = civicReports.filter(rep => {
+        if (rep.id === selectedTicketId && !searchLat) return false;
+        
+        const dist = calculateDistance(lat, lng, rep.lat, rep.lng);
+        rep.tempDistance = dist;
+        return dist <= radius;
+      });
+      
+      nearby.sort((a, b) => a.tempDistance - b.tempDistance);
+      
+      if (nearby.length === 0) {
+        resultsContainer.innerHTML = `<p class="text-xs text-slate-400">No other reports found within ${radius} km of this location.</p>`;
+        return;
+      }
+      
+      nearby.forEach(rep => {
+        const displayCategory = (categoriesTranslations[currentLang] && categoriesTranslations[currentLang][rep.category]) || rep.category;
+        const sevColor = getSeverityColor(rep.severity);
+        
+        const row = document.createElement('div');
+        row.className = "flex items-center justify-between p-2.5 bg-white rounded-lg border border-slate-200 hover:border-indigo-400 transition cursor-pointer";
+        row.onclick = () => {
+          selectedTicketId = rep.id;
+          if (leafletMap) {
+            leafletMap.setView([rep.lat, rep.lng], 14);
+          }
+          switchAdminTab('queue');
+          renderAdminQueue();
+        };
+        
+        row.innerHTML = `
+          <div class="flex items-center gap-2">
+            <span class="w-3.5 h-3.5 rounded-full border border-black/10 shadow-sm" style="background-color: ${sevColor.hex};"></span>
+            <div>
+              <div class="font-bold text-slate-800 text-[11px]">${rep.id} • ${displayCategory}</div>
+              <div class="text-[10px] text-slate-500 truncate max-w-[220px]">${rep.location}</div>
+            </div>
+          </div>
+          <div class="text-[10px] font-mono text-indigo-600 font-bold shrink-0">${rep.tempDistance.toFixed(2)} km away</div>
+        `;
+        resultsContainer.appendChild(row);
+      });
     }
   </script>
 </body>

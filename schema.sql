@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS civic_reports (
   lat DOUBLE PRECISION,
   lng DOUBLE PRECISION,
   status TEXT DEFAULT 'Pending',
-  severity INT DEFAULT 3,
+  severity INT DEFAULT 0,
   duplicates_count INT DEFAULT 1,
   image_url TEXT,
   timestamp TIMESTAMPTZ DEFAULT NOW(),
