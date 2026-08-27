@@ -1629,19 +1629,20 @@ if (require.main === module) {
   });
 }
 
+app.app = app;
+app.classifyReport = classifyReport;
+app.calculateDistance = calculateDistance;
+app.calculateDistanceMeters = calculateDistanceMeters;
+app.calculateReportScore = calculateReportScore;
+app.calculateReportCountScore = calculateReportCountScore;
+app.calculateLocationScore = calculateLocationScore;
+app.getTrafficLevel = getTrafficLevel;
+app.calculateTrafficScore = calculateTrafficScore;
+app.calculateFinalPriority = calculateFinalPriority;
+app.findNearbyFacility = findNearbyFacility;
+app.findDuplicateReport = findDuplicateReport;
+app.findDuplicateReports = findDuplicateReports;
+app.enrichReportsWithClusters = enrichReportsWithClusters;
+app.formatReportRow = formatReportRow;
+
 module.exports = app;
-module.exports.app = app;
-module.exports.classifyReport = classifyReport;
-module.exports.calculateDistance = calculateDistance;
-module.exports.calculateDistanceMeters = calculateDistanceMeters;
-module.exports.calculateReportScore = calculateReportScore;
-module.exports.calculateReportCountScore = calculateReportCountScore;
-module.exports.calculateLocationScore = calculateLocationScore;
-module.exports.getTrafficLevel = getTrafficLevel;
-module.exports.calculateTrafficScore = calculateTrafficScore;
-module.exports.calculateFinalPriority = calculateFinalPriority;
-module.exports.findNearbyFacility = findNearbyFacility;
-module.exports.findDuplicateReport = findDuplicateReport;
-module.exports.findDuplicateReports = findDuplicateReports;
-module.exports.enrichReportsWithClusters = enrichReportsWithClusters;
-module.exports.formatReportRow = formatReportRow;
