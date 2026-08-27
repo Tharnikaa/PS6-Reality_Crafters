@@ -29,6 +29,7 @@ if (supabaseUrl && supabaseKey && !supabaseUrl.includes('your-supabase-project')
 }
 
 const { runSpamGate } = require('./backend/pipeline/spamGate');
+const { authenticateToken } = require('./backend/auth');
 
 // ── Multer — memory storage (required for Vercel serverless) ─
 // Vercel does not allow writing to disk, so we keep the file
@@ -489,7 +490,7 @@ app.get('/api/reports/prioritized', async (req, res) => {
 // If any step 6–18 fails, the report is already saved (step 5),
 // so the citizen's submission is never lost.
 // ─────────────────────────────────────────────────────────────
-app.post('/api/reports', upload.single('image'), async (req, res) => {
+app.post('/api/reports', authenticateToken, upload.single('image'), async (req, res) => {
   const { description, location, lat, lng, reporterPhone } = req.body;
 
   // ── 1. Upload image ──────────────────────────────────────

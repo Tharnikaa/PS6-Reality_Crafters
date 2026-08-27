@@ -1147,8 +1147,12 @@
       }
 
       try {
+        const token = localStorage.getItem('supabase_access_token') || 'demo-jwt-token';
         const res = await fetch('/api/reports', {
           method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
           body: formData
         });
         const data = await res.json();
