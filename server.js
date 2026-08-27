@@ -1,11 +1,25 @@
+require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const multer = require('multer');
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configure multer for file uploads
+// Initialize Supabase Client
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+let supabase = null;
+
+if (supabaseUrl && supabaseKey && !supabaseUrl.includes('your-supabase-project')) {
+  supabase = createClient(supabaseUrl, supabaseKey);
+  console.log('Supabase database integration initialized.');
+} else {
+  console.warn('Supabase URL/Key missing or default. Operating with mock database fallback.');
+}
+
+// Configure multer for local file uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, path.join(__dirname, 'public/uploads'));
@@ -23,8 +37,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// In-Memory Civic Reports Data Store
-let civicReports = [
+// In-Memory Fallback Reports Data
+let fallbackReports = [
   {
     id: "REP-4091",
     category: "Pothole / Road Hazard",
@@ -72,20 +86,56 @@ let civicReports = [
   }
 ];
 
+// Helper to map DB row object to frontend JSON structure
+function formatReportRow(row) {
+  return {
+    id: row.id,
+    category: row.category,
+    department: row.department,
+    description: row.description,
+    location: row.location,
+    lat: row.lat,
+    lng: row.lng,
+    status: row.status,
+    severity: row.severity,
+    duplicatesCount: row.duplicates_count || 1,
+    imageUrl: row.image_url,
+    timestamp: row.timestamp ? new Date(row.timestamp).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'Recently',
+    reporterPhone: row.reporter_phone
+  };
+}
+
 // --- REST API ENDPOINTS ---
 
-// GET /api/reports - Fetch reports (optional queryParam department filtering)
-app.get('/api/reports', (req, res) => {
+// GET /api/reports - Fetch reports from Supabase DB or Fallback Memory
+app.get('/api/reports', async (req, res) => {
   const { department } = req.query;
+
+  if (supabase) {
+    try {
+      let query = supabase.from('civic_reports').select('*').order('timestamp', { ascending: false });
+      if (department && department !== 'All') {
+        query = query.eq('department', department);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      const formatted = (data || []).map(formatReportRow);
+      return res.json(formatted);
+    } catch (err) {
+      console.error('Supabase fetch error, falling back to memory:', err.message);
+    }
+  }
+
+  // Fallback memory filtering
   if (department && department !== 'All') {
-    const filtered = civicReports.filter(r => r.department === department);
+    const filtered = fallbackReports.filter(r => r.department === department);
     return res.json(filtered);
   }
-  res.json(civicReports);
+  res.json(fallbackReports);
 });
 
-// POST /api/reports - Submit a new report (with optional image upload)
-app.post('/api/reports', upload.single('image'), (req, res) => {
+// POST /api/reports - Create new report in Supabase DB or Fallback Memory
+app.post('/api/reports', upload.single('image'), async (req, res) => {
   const { description, location, lat, lng, reporterPhone } = req.body;
 
   let imageUrl = "https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=500&q=80";
@@ -105,7 +155,7 @@ app.post('/api/reports', upload.single('image'), (req, res) => {
   if (isGarbage) { dept = "Solid Waste Management"; category = "Garbage Overflow"; }
   if (isLight) { dept = "Electrical Department"; category = "Broken Streetlight"; }
 
-  const newReport = {
+  const newReportData = {
     id: `REP-${Math.floor(1000 + Math.random() * 9000)}`,
     category: category,
     department: dept,
@@ -115,22 +165,56 @@ app.post('/api/reports', upload.single('image'), (req, res) => {
     lng: parseFloat(lng) || 80.2707,
     status: "Pending",
     severity: Math.floor(Math.random() * 3) + 2,
-    duplicatesCount: 1,
-    imageUrl: imageUrl,
-    timestamp: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
-    reporterPhone: reporterPhone || "+91 9876543210"
+    duplicates_count: 1,
+    image_url: imageUrl,
+    reporter_phone: reporterPhone || "+91 9876543210"
   };
 
-  civicReports.unshift(newReport);
-  res.status(201).json({ success: true, report: newReport });
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('civic_reports')
+        .insert([newReportData])
+        .select();
+
+      if (error) throw error;
+      const createdReport = formatReportRow(data[0]);
+      return res.status(201).json({ success: true, report: createdReport });
+    } catch (err) {
+      console.error('Supabase insert error, saving to memory fallback:', err.message);
+    }
+  }
+
+  // Fallback memory insert
+  const formattedReport = formatReportRow(newReportData);
+  fallbackReports.unshift(formattedReport);
+  res.status(201).json({ success: true, report: formattedReport });
 });
 
-// PATCH /api/reports/:id/status - Update report status
-app.patch('/api/reports/:id/status', (req, res) => {
+// PATCH /api/reports/:id/status - Update report status in Supabase DB or Fallback Memory
+app.patch('/api/reports/:id/status', async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
 
-  const report = civicReports.find(r => r.id === id);
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('civic_reports')
+        .update({ status: status })
+        .eq('id', id)
+        .select();
+
+      if (error) throw error;
+      if (data && data.length > 0) {
+        return res.json({ success: true, report: formatReportRow(data[0]) });
+      }
+    } catch (err) {
+      console.error('Supabase update error, trying memory fallback:', err.message);
+    }
+  }
+
+  // Fallback memory update
+  const report = fallbackReports.find(r => r.id === id);
   if (!report) {
     return res.status(404).json({ success: false, message: 'Report not found' });
   }
