@@ -87,6 +87,18 @@ CREATE TABLE IF NOT EXISTS staff_details (
   created_at   TIMESTAMPTZ DEFAULT NOW()          -- Account creation timestamp
 );
 
+-- ── Table: public_users ───────────────────────────────────────
+-- Stores registered citizen public users (Mobile + CAPTCHA Auth).
+-- ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public_users (
+  id           TEXT PRIMARY KEY,                  -- e.g. USR-9876543210
+  mobile       TEXT UNIQUE NOT NULL,              -- Mobile number (+91 format)
+  name         TEXT DEFAULT 'Citizen User',       -- Optional display name
+  created_at   TIMESTAMPTZ DEFAULT NOW()          -- Account creation timestamp
+);
+
+ALTER TABLE public_users ENABLE ROW LEVEL SECURITY;
+
 ALTER TABLE staff_details ENABLE ROW LEVEL SECURITY;
 
 -- ── Row Level Security (RLS) ──────────────────────────────────

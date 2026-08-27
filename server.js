@@ -32,7 +32,8 @@ if (supabaseUrl && supabaseKey && !supabaseUrl.includes('your-supabase-project')
 
 const { runSpamGate } = require('./backend/pipeline/spamGate');
 const { authenticateToken } = require('./backend/auth');
-const { sendRealOtp, verifyOtpCode } = require('./backend/smsService');
+const { verifyGoogleCaptcha, normalizeMobileNumber, isValidMobileNumber } = require('./backend/captchaService');
+const { authRateLimiter } = require('./backend/rateLimiter');
 
 // ── Multer — memory storage (required for Vercel serverless) ─
 // Vercel does not allow writing to disk, so we keep the file
@@ -1273,78 +1274,174 @@ async function autoClusterExistingReports() {
   }
 }
 
-// ── POST /api/auth/send-otp ───────────────────────────────────
-// Generates a secure real 6-digit SMS OTP and dispatches via SMS Gateway
-app.post('/api/auth/send-otp', async (req, res) => {
-  const { phone } = req.body || {};
+// ── In-memory fallback registered public users store ──────────
+const fallbackPublicUsers = new Map([
+  ['+919876543210', { id: 'USR-9876543210', mobile: '+919876543210', name: 'Demo Citizen' }],
+  ['+919876543211', { id: 'USR-9876543211', mobile: '+919876543211', name: 'Anand S' }]
+]);
 
-  if (!phone || String(phone).trim().length < 8) {
-    return res.status(400).json({ success: false, message: 'Valid mobile number with country code is required (e.g. +91 9876543210).' });
+// ── POST /api/auth/signin ─────────────────────────────────────
+// Public Citizen Sign In with Mobile Number + Google reCAPTCHA v2 Verification
+app.post('/api/auth/signin', authRateLimiter, async (req, res) => {
+  const { mobile, captchaToken } = req.body || {};
+
+  if (!mobile || String(mobile).trim() === '') {
+    return res.status(400).json({ success: false, message: 'Please enter your mobile number.' });
   }
 
-  const result = await sendRealOtp(phone, supabase);
+  if (!isValidMobileNumber(mobile)) {
+    return res.status(400).json({ success: false, message: 'Please enter a valid mobile number.' });
+  }
+
+  if (!captchaToken || String(captchaToken).trim() === '') {
+    return res.status(400).json({ success: false, message: 'Please complete the CAPTCHA.' });
+  }
+
+  // Step 1: Verify CAPTCHA token with Google reCAPTCHA siteverify API
+  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+  const captchaResult = await verifyGoogleCaptcha(captchaToken, clientIp);
+
+  if (!captchaResult.success) {
+    return res.status(400).json({
+      success: false,
+      message: captchaResult.message || 'CAPTCHA verification failed. Please try again.'
+    });
+  }
+
+  const normalizedMobile = normalizeMobileNumber(mobile);
+
+  // Step 2: Search for user in Supabase public_users or fallback store
+  let existingUser = null;
+
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('public_users')
+        .select('*')
+        .eq('mobile', normalizedMobile)
+        .maybeSingle();
+
+      if (!error && data) {
+        existingUser = data;
+      }
+    } catch (err) {
+      console.warn('[AUTH SIGNIN] Supabase public_users query warning:', err.message);
+    }
+  }
+
+  if (!existingUser) {
+    existingUser = fallbackPublicUsers.get(normalizedMobile) || null;
+  }
+
+  // Step 3: Handle User Search Result
+  if (!existingUser) {
+    return res.status(404).json({
+      success: false,
+      message: 'Account not found. Please sign up.'
+    });
+  }
+
+  const issuedToken = `captcha-session-token-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
 
   return res.json({
     success: true,
-    message: result.message,
-    phone: result.cleanPhone,
-    serviceUsed: result.serviceUsed,
-    mockOtp: result.otpCode
+    message: 'Login successful',
+    token: issuedToken,
+    user: {
+      id: existingUser.id,
+      mobile: existingUser.mobile,
+      name: existingUser.name || 'Citizen User'
+    }
   });
 });
 
-// ── POST /api/auth/verify-otp ─────────────────────────────────
-// Verifies 6-digit SMS OTP code and returns authenticated JWT token
-app.post('/api/auth/verify-otp', async (req, res) => {
-  const { phone, otp } = req.body || {};
+// ── POST /api/auth/signup ─────────────────────────────────────
+// Public Citizen Account Creation with Mobile Number + Google reCAPTCHA v2 Verification
+app.post('/api/auth/signup', authRateLimiter, async (req, res) => {
+  const { mobile, captchaToken, name } = req.body || {};
 
-  if (!phone || !otp) {
-    return res.status(400).json({ success: false, message: 'Phone number and 6-digit OTP code are required.' });
+  if (!mobile || String(mobile).trim() === '') {
+    return res.status(400).json({ success: false, message: 'Please enter your mobile number.' });
   }
 
-  const cleanPhone = String(phone).trim();
-  const cleanOtp   = String(otp).trim();
+  if (!isValidMobileNumber(mobile)) {
+    return res.status(400).json({ success: false, message: 'Please enter a valid mobile number.' });
+  }
 
-  // Step 1: Check Supabase Auth verifyOtp if available
-  if (supabase && typeof supabase.auth?.verifyOtp === 'function') {
+  if (!captchaToken || String(captchaToken).trim() === '') {
+    return res.status(400).json({ success: false, message: 'Please complete the CAPTCHA.' });
+  }
+
+  // Step 1: Verify CAPTCHA token with Google reCAPTCHA
+  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+  const captchaResult = await verifyGoogleCaptcha(captchaToken, clientIp);
+
+  if (!captchaResult.success) {
+    return res.status(400).json({
+      success: false,
+      message: captchaResult.message || 'CAPTCHA verification failed. Please try again.'
+    });
+  }
+
+  const normalizedMobile = normalizeMobileNumber(mobile);
+
+  // Step 2: Check if user already exists
+  let existingUser = null;
+
+  if (supabase) {
     try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        phone: cleanPhone,
-        token: cleanOtp,
-        type: 'sms'
-      });
+      const { data, error } = await supabase
+        .from('public_users')
+        .select('*')
+        .eq('mobile', normalizedMobile)
+        .maybeSingle();
 
-      if (!error && data?.session) {
-        return res.json({
-          success: true,
-          message: 'OTP verified successfully via Supabase Auth.',
-          token: data.session.access_token,
-          user: { id: data.user.id, phone: cleanPhone }
-        });
+      if (!error && data) {
+        existingUser = data;
       }
     } catch (err) {
-      console.warn(`[SMS VERIFY] Supabase OTP verify warning (falling back to SMS service verification):`, err.message);
+      console.warn('[AUTH SIGNUP] Supabase lookup warning:', err.message);
     }
   }
 
-  // Step 2: Validate against SMS Service active OTP store
-  const verification = verifyOtpCode(cleanPhone, cleanOtp);
-
-  if (!verification.valid) {
-    return res.status(401).json({ success: false, message: `Access denied: ${verification.reason}` });
+  if (!existingUser) {
+    existingUser = fallbackPublicUsers.get(normalizedMobile) || null;
   }
 
-  // Issue authenticated session token
-  const issuedToken = `jwt-access-token-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+  if (existingUser) {
+    return res.status(400).json({
+      success: false,
+      message: 'An account already exists with this mobile number.'
+    });
+  }
+
+  // Step 3: Create new Public User Account
+  const newUserId = `USR-${normalizedMobile.replace(/[^0-9]/g, '')}`;
+  const userName = name && String(name).trim() !== '' ? String(name).trim() : 'Citizen User';
+
+  const newUserRecord = {
+    id: newUserId,
+    mobile: normalizedMobile,
+    name: userName
+  };
+
+  if (supabase) {
+    try {
+      await supabase.from('public_users').insert([newUserRecord]);
+    } catch (err) {
+      console.warn('[AUTH SIGNUP] Supabase insert warning:', err.message);
+    }
+  }
+
+  fallbackPublicUsers.set(normalizedMobile, newUserRecord);
+
+  const issuedToken = `captcha-session-token-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
 
   return res.json({
     success: true,
-    message: 'OTP verified successfully. Citizen authenticated.',
+    message: 'Account created successfully',
     token: issuedToken,
-    user: {
-      id: `usr-${Date.now().toString(36)}`,
-      phone: cleanPhone
-    }
+    user: newUserRecord
   });
 });
 

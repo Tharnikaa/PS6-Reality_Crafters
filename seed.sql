@@ -180,3 +180,20 @@ INSERT INTO staff_details (
 ('STF-106', 'Mohan Das',     'mohan.das@civicresolve.gov.in',     'WastePass@456',     'Solid Waste Management',  'Official',   'Zone B', '+91 9876543215', true),
 ('STF-107', 'Anitha R',      'anitha.r@civicresolve.gov.in',      'ElectricalPass@123','Electrical Department',   'Official',   'Zone A', '+91 9876543216', true),
 ('STF-108', 'Vijay Anand',   'vijay.anand@civicresolve.gov.in',   'ElectricalPass@456','Electrical Department',   'Supervisor', 'Zone B', '+91 9876543217', true);
+
+-- ── Table: public_users ───────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public_users (
+  id           TEXT PRIMARY KEY,
+  mobile       TEXT UNIQUE NOT NULL,
+  name         TEXT DEFAULT 'Citizen User',
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public_users ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read users"   ON public_users FOR SELECT USING (true);
+CREATE POLICY "Allow public insert users" ON public_users FOR INSERT WITH CHECK (true);
+
+INSERT INTO public_users (id, mobile, name) VALUES
+('USR-9876543210', '+919876543210', 'Demo Citizen'),
+('USR-9876543211', '+919876543211', 'Anand S');
+
