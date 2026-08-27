@@ -9,6 +9,7 @@
 
 require('dotenv').config();
 const fs      = require('fs');
+const os      = require('os');
 const express = require('express');
 const path    = require('path');
 const multer  = require('multer');
@@ -824,8 +825,7 @@ app.post('/api/reports', authenticateToken, upload.single('image'), async (req, 
   if (req.file) {
     imageUrl = await uploadImageToSupabase(req.file.buffer, req.file.originalname);
     try {
-      const uploadsDir = path.join(__dirname, 'public/uploads');
-      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+      const uploadsDir = os.tmpdir();
       tempImagePath = path.join(uploadsDir, `temp-${Date.now()}-${req.file.originalname}`);
       fs.writeFileSync(tempImagePath, req.file.buffer);
     } catch (e) {
@@ -1629,20 +1629,19 @@ if (require.main === module) {
   });
 }
 
-module.exports = {
-  app,
-  classifyReport,
-  calculateDistance,
-  calculateDistanceMeters,
-  calculateReportScore,
-  calculateReportCountScore,
-  calculateLocationScore,
-  getTrafficLevel,
-  calculateTrafficScore,
-  calculateFinalPriority,
-  findNearbyFacility,
-  findDuplicateReport,
-  findDuplicateReports,
-  enrichReportsWithClusters,
-  formatReportRow
-};
+module.exports = app;
+module.exports.app = app;
+module.exports.classifyReport = classifyReport;
+module.exports.calculateDistance = calculateDistance;
+module.exports.calculateDistanceMeters = calculateDistanceMeters;
+module.exports.calculateReportScore = calculateReportScore;
+module.exports.calculateReportCountScore = calculateReportCountScore;
+module.exports.calculateLocationScore = calculateLocationScore;
+module.exports.getTrafficLevel = getTrafficLevel;
+module.exports.calculateTrafficScore = calculateTrafficScore;
+module.exports.calculateFinalPriority = calculateFinalPriority;
+module.exports.findNearbyFacility = findNearbyFacility;
+module.exports.findDuplicateReport = findDuplicateReport;
+module.exports.findDuplicateReports = findDuplicateReports;
+module.exports.enrichReportsWithClusters = enrichReportsWithClusters;
+module.exports.formatReportRow = formatReportRow;

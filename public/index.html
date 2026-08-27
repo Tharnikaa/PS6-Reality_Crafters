@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CivicResolve - Citizen & Municipal Portal</title>
+  <link rel="icon" type="image/png" href="/logo.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- Google reCAPTCHA v2 API -->
@@ -33,8 +34,8 @@
   <!-- TOP NAVBAR -->
   <header class="bg-slate-900 text-white sticky top-0 z-50 shadow-md">
     <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center gap-2 cursor-pointer" onclick="showView('auth-select-view')">
-        <i class="fa-solid fa-city text-indigo-400 text-xl"></i>
+      <div class="flex items-center gap-2.5 cursor-pointer" onclick="showView('auth-select-view')">
+        <img src="/logo.png" alt="CivicResolve Logo" class="h-8 w-auto object-contain rounded-md">
         <span class="font-bold text-lg tracking-tight" id="nav-brand">CivicResolve</span>
       </div>
 
@@ -65,8 +66,8 @@
 
     <!-- 1. AUTH SELECTION VIEW -->
     <section id="auth-select-view" class="max-w-md mx-auto mt-10 text-center">
-      <div class="inline-flex p-3 bg-indigo-100 text-indigo-600 rounded-2xl mb-4">
-        <i class="fa-solid fa-landmark text-3xl"></i>
+      <div class="inline-flex p-3 bg-white rounded-2xl mb-4 shadow-sm border border-slate-200">
+        <img src="/logo.png" alt="CivicResolve Logo" class="h-16 w-auto object-contain">
       </div>
       <h1 class="text-2xl font-bold text-slate-900 mb-2" id="txt-app-title">CivicResolve</h1>
       <p class="text-xs text-slate-600 mb-8" id="txt-app-subtitle">AI-Powered Civic Issue Reporting & Municipal Triage</p>
