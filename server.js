@@ -45,74 +45,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Used only when Supabase is not configured (local dev).
 // In production the Supabase DB is used instead.
 // ============================================================
-let fallbackReports = [
-  {
-    id: 'REP-4091',
-    category: 'Pothole & Surface Damage',
-    department: 'Highways & Roads',
-    description: 'Dangerous crater-sized pothole right after the signal. Causing severe traffic skids.',
-    location: 'Anna Salai, Near Spencers Plaza, Chennai',
-    lat: 13.0604,
-    lng: 80.2496,
-    status: 'In Progress',
-    severity: 5,
-    duplicatesCount: 5,
-    imageUrl: 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=500&q=80',
-    timestamp: '27 Aug 2026, 09:15 AM',
-    reporterPhone: '+91 9876543210',
-    priority_score: 95,
-    priority_level: 'CRITICAL',
-    nearby_facility: true,
-    facility_type: 'HOSPITAL',
-    facility_name: "Apollo Children's Hospital",
-    facility_distance: 0,
-    high_traffic_area: true
-  },
-  {
-    id: 'REP-4088',
-    category: 'Garbage Overflow',
-    department: 'Solid Waste Management',
-    description: 'Community bin overflowing for 3 days. Blocking sidewalk completely.',
-    location: 'T. Nagar 3rd Main Rd, Chennai',
-    lat: 13.0418,
-    lng: 80.2341,
-    status: 'Pending',
-    severity: 4,
-    duplicatesCount: 2,
-    imageUrl: 'https://images.unsplash.com/photo-1605600659908-0ef719419d41?w=500&q=80',
-    timestamp: '27 Aug 2026, 10:30 AM',
-    reporterPhone: '+91 9123456789',
-    priority_score: 70,
-    priority_level: 'HIGH',
-    nearby_facility: true,
-    facility_type: 'SCHOOL',
-    facility_name: 'T. Nagar Girls Higher Secondary School',
-    facility_distance: 60,
-    high_traffic_area: true
-  },
-  {
-    id: 'REP-4072',
-    category: 'Broken Streetlight',
-    department: 'Electrical Department',
-    description: 'Streetlights not functioning for the entire block. Complete darkness at night.',
-    location: 'Velachery Bypass Rd, Chennai',
-    lat: 12.9815,
-    lng: 80.2180,
-    status: 'Resolved',
-    severity: 2,
-    duplicatesCount: 1,
-    imageUrl: 'https://images.unsplash.com/photo-1509114397022-ed747cca3f65?w=500&q=80',
-    timestamp: '26 Aug 2026, 06:45 PM',
-    reporterPhone: '+91 9988776655',
-    priority_score: 20,
-    priority_level: 'LOW',
-    nearby_facility: false,
-    facility_type: null,
-    facility_name: null,
-    facility_distance: null,
-    high_traffic_area: false
-  }
-];
+// ZERO DUMMY DATA ENFORCEMENT: Empty reports list
+let fallbackReports = [];
 
 // ============================================================
 // KNOWN FACILITIES — Schools & Hospitals in Chennai
@@ -604,14 +538,27 @@ app.post('/api/reports', upload.single('image'), async (req, res) => {
   const spamResult = await detectSpam(initialReport);
 
   if (spamResult.error) {
+    if (spamResult.error.code === 'SPAM_CLEANUP_FAILED') {
+      return res.status(500).json({ success: false, error: 'Unable to complete spam cleanup.' });
+    }
     return res.status(500).json({ success: false, error: spamResult.error.message });
   }
 
-  if (spamResult.pipeline.continue === false) {
-    return res.status(200).json({
+  // IF SPAM -> REJECT REQUEST AND DO NOT INSERT REPORT INTO DATABASE
+  if (spamResult.spam && spamResult.spam.isSpam) {
+    if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (unlinkErr) {
+        console.warn('[SPAM] Warning: Failed to clean up orphaned local image:', unlinkErr.message);
+      }
+    }
+
+    return res.status(400).json({
       success: false,
-      message: 'Report identified as spam and pipeline halted.',
-      result: spamResult
+      spam: true,
+      deleted: true,
+      message: 'Report rejected.'
     });
   }
 
@@ -761,6 +708,8 @@ app.post('/api/reports', upload.single('image'), async (req, res) => {
   // ── 16. Return enriched response to the frontend ─────────
   return res.status(201).json({
     success: true,
+    spam: false,
+    deleted: false,
     report: {
       ...formatReportRow(initialReport),
       duplicatesCount:   duplicateCount,

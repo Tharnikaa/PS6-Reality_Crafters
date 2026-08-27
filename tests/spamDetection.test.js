@@ -20,59 +20,62 @@ async function runTest(testName, testFn) {
 }
 
 async function executeTestSuite() {
-  // CASE 1: No photo + valid description
-  await runTest('CASE 1: No photo + valid description => NO_PHOTO spam', async () => {
+  // CASE 1: No photo + valid description => NO_PHOTO spam, report: null
+  await runTest('CASE 1: No photo + valid description => NO_PHOTO spam (Deleted)', async () => {
     const report = {
       id: 'CIV-1001',
       description: 'Pothole on Main Street',
       image_url: null,
       device_id: 'device-abc'
     };
-    const result = await detectSpam(report, { mockFrequency: 0 });
+    const result = await detectSpam(report, { mockFrequency: 0, mockDelete: true });
     
     assert.strictEqual(result.spam.isSpam, true);
     assert.deepStrictEqual(result.spam.reasons, ['NO_PHOTO']);
+    assert.strictEqual(result.report, null);
     assert.strictEqual(result.pipeline.continue, false);
     assert.strictEqual(result.pipeline.nextStage, null);
-    assert.strictEqual(result.report.status, 'Spam');
+    assert.strictEqual(result.pipeline.action, 'deleted');
   });
 
-  // CASE 2: Photo + empty description
-  await runTest('CASE 2: Photo + empty description => EMPTY_DESCRIPTION spam', async () => {
+  // CASE 2: Photo + empty description => EMPTY_DESCRIPTION spam, report: null
+  await runTest('CASE 2: Photo + empty description => EMPTY_DESCRIPTION spam (Deleted)', async () => {
     const report = {
       id: 'CIV-1002',
       description: '   ',
       image_url: 'https://example.com/photo.jpg',
       device_id: 'device-abc'
     };
-    const result = await detectSpam(report, { mockFrequency: 0 });
+    const result = await detectSpam(report, { mockFrequency: 0, mockDelete: true });
 
     assert.strictEqual(result.spam.isSpam, true);
     assert.deepStrictEqual(result.spam.reasons, ['EMPTY_DESCRIPTION']);
+    assert.strictEqual(result.report, null);
     assert.strictEqual(result.pipeline.continue, false);
     assert.strictEqual(result.pipeline.nextStage, null);
-    assert.strictEqual(result.report.status, 'Spam');
+    assert.strictEqual(result.pipeline.action, 'deleted');
   });
 
-  // CASE 3: No photo + empty description
-  await runTest('CASE 3: No photo + empty description => NO_PHOTO and EMPTY_DESCRIPTION spam', async () => {
+  // CASE 3: No photo + empty description => NO_PHOTO and EMPTY_DESCRIPTION spam, report: null
+  await runTest('CASE 3: No photo + empty description => NO_PHOTO and EMPTY_DESCRIPTION spam (Deleted)', async () => {
     const report = {
       id: 'CIV-1003',
       description: '',
       image_url: '',
       device_id: 'device-abc'
     };
-    const result = await detectSpam(report, { mockFrequency: 0 });
+    const result = await detectSpam(report, { mockFrequency: 0, mockDelete: true });
 
     assert.strictEqual(result.spam.isSpam, true);
     assert.deepStrictEqual(result.spam.reasons, ['NO_PHOTO', 'EMPTY_DESCRIPTION']);
+    assert.strictEqual(result.report, null);
     assert.strictEqual(result.pipeline.continue, false);
     assert.strictEqual(result.pipeline.nextStage, null);
-    assert.strictEqual(result.report.status, 'Spam');
+    assert.strictEqual(result.pipeline.action, 'deleted');
   });
 
-  // CASE 4: Photo + description + normal device activity
-  await runTest('CASE 4: Photo + description + normal device activity => Clean report', async () => {
+  // CASE 4: Photo + description + normal device activity => NOT SPAM
+  await runTest('CASE 4: Photo + description + normal device activity => Clean report preserved', async () => {
     const report = {
       id: 'CIV-1004',
       description: 'Broken streetlight near apartment block',
@@ -85,24 +88,26 @@ async function executeTestSuite() {
     assert.deepStrictEqual(result.spam.reasons, []);
     assert.strictEqual(result.pipeline.continue, true);
     assert.strictEqual(result.pipeline.nextStage, 'categorisation');
+    assert.ok(result.report, 'Report should be preserved for valid submission');
     assert.strictEqual(result.report.id, 'CIV-1004');
   });
 
-  // CASE 5: Photo + description + > 3 reports from device in 10 mins
-  await runTest('CASE 5: Photo + description + > 3 reports from device => TOO_MANY_REPORTS_FROM_DEVICE spam', async () => {
+  // CASE 5: Photo + description + > 3 recent reports from device in 10 mins => TOO_MANY_REPORTS_FROM_DEVICE
+  await runTest('CASE 5: Photo + description + > 3 reports from device => TOO_MANY_REPORTS_FROM_DEVICE (Deleted)', async () => {
     const report = {
       id: 'CIV-1005',
       description: 'Water leak on sidewalk',
       image_url: 'https://example.com/leak.jpg',
       device_id: 'device-spammer'
     };
-    const result = await detectSpam(report, { mockFrequency: 4 });
+    const result = await detectSpam(report, { mockFrequency: 4, mockDelete: true });
 
     assert.strictEqual(result.spam.isSpam, true);
     assert.deepStrictEqual(result.spam.reasons, ['TOO_MANY_REPORTS_FROM_DEVICE']);
+    assert.strictEqual(result.report, null);
     assert.strictEqual(result.pipeline.continue, false);
     assert.strictEqual(result.pipeline.nextStage, null);
-    assert.strictEqual(result.report.status, 'Spam');
+    assert.strictEqual(result.pipeline.action, 'deleted');
   });
 
   // CASE 6: Supabase device lookup fails

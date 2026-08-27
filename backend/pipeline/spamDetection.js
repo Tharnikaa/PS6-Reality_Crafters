@@ -5,22 +5,24 @@ const axios = require('axios');
  * 
  * Receives one incoming civic report object and determines whether it should be flagged as spam.
  * 
+ * Spam Rules:
  * Rule 1 — NO_PHOTO: image_url is null, undefined, empty, or whitespace-only
  * Rule 2 — EMPTY_DESCRIPTION: description is null, undefined, empty, or whitespace-only
  * Rule 3 — TOO_MANY_REPORTS_FROM_DEVICE: > 3 reports from same device_id in past 10 minutes
  * 
- * If spam is detected:
- * - Marks status as "Spam"
- * - Updates/Stores report in Supabase with status "Spam" via Axios REST API
- * - Returns pipeline contract with continue: false, nextStage: null
+ * Behavior when Spam Detected:
+ * - Logs server-side debug diagnostics
+ * - If report exists in database, DELETES row via Axios (DELETE /rest/v1/civic_reports?id=eq.<report_id>)
+ * - Returns report: null, pipeline.continue: false, pipeline.action: 'deleted'
  * 
  * @param {Object} report - Incoming civic report object
  * @param {Object} [options] - Configuration overrides for testing
  * @returns {Promise<Object>} Shared pipeline contract object
  */
 async function detectSpam(report, options = {}) {
-  // Error handling: validate basic report input
+  // Validate basic report input
   if (!report || typeof report !== 'object') {
+    console.error('[SPAM] Invalid or missing report object provided');
     return {
       error: {
         message: 'Invalid or missing report object',
@@ -37,6 +39,9 @@ async function detectSpam(report, options = {}) {
       }
     };
   }
+
+  const reportId = report.id || 'UNKNOWN';
+  console.log(`[SPAM] Checking report: ${reportId}`);
 
   const reasons = [];
 
@@ -59,7 +64,7 @@ async function detectSpam(report, options = {}) {
   }
 
   // RULE 3 — TOO MANY REPORTS FROM THE SAME DEVICE
-  // Only query Supabase recent-device lookup if local checks pass (cheap local checks first)
+  // Perform recent-device lookup only if cheap local checks passed
   const deviceId = report.device_id;
   const hasLocalSpam = reasons.length > 0;
   
@@ -70,7 +75,7 @@ async function detectSpam(report, options = {}) {
         reasons.push('TOO_MANY_REPORTS_FROM_DEVICE');
       }
     } catch (err) {
-      // CASE 6: Supabase device lookup failure -> return explicit error structure
+      console.error(`[SPAM] Supabase device lookup error for ${reportId}: ${err.message}`);
       return {
         error: {
           message: `Supabase device lookup failed: ${err.message}`,
@@ -90,35 +95,56 @@ async function detectSpam(report, options = {}) {
   }
 
   const isSpam = reasons.length > 0;
+  console.log(`[SPAM] Detected: ${isSpam}`);
 
   if (isSpam) {
-    // Clone report object and set status to "Spam"
-    const updatedReport = {
-      ...report,
-      status: 'Spam'
-    };
+    console.log(`[SPAM] Reasons: ${reasons.join(', ')}`);
 
-    // Update report status in Supabase via Axios REST API if target ID exists
-    if (report.id) {
-      await updateReportStatusInSupabase(report.id, 'Spam', options).catch(err => {
-        console.warn(`[SpamDetection] Warning: Failed to update status in Supabase: ${err.message}`);
-      });
+    // If report row already exists in Supabase (or delete requested), DELETE exact row via Axios
+    if ((options.deleteFromDb || options.isAlreadyInserted) && report.id) {
+      console.log(`[SPAM] Deleting report: ${report.id}`);
+      try {
+        await deleteReportFromSupabase(report.id, options);
+        console.log(`[SPAM] Delete successful`);
+      } catch (err) {
+        console.error(`[SPAM] Delete failed for ${report.id}: ${err.message}`);
+        return {
+          error: {
+            message: `Unable to complete spam cleanup: ${err.message}`,
+            code: 'SPAM_CLEANUP_FAILED'
+          },
+          report: null,
+          spam: {
+            isSpam: true,
+            reasons: reasons
+          },
+          pipeline: {
+            continue: false,
+            nextStage: null,
+            action: 'cleanup_failed'
+          }
+        };
+      }
     }
 
+    console.log(`[PIPELINE] Stopped`);
+
     return {
-      report: updatedReport,
+      report: null,
       spam: {
         isSpam: true,
         reasons: reasons
       },
       pipeline: {
         continue: false,
-        nextStage: null
+        nextStage: null,
+        action: 'deleted'
       }
     };
   }
 
-  // Valid report -> proceed to categorisation
+  console.log(`[PIPELINE] Continuing to categorisation`);
+
   return {
     report: report,
     spam: {
@@ -175,12 +201,15 @@ async function checkDeviceReportFrequency(deviceId, options = {}) {
 }
 
 /**
- * Helper: Update report status in Supabase REST API via Axios
- * PATCH /civic_reports?id=eq.<report_id>
+ * Helper: Delete specific report from Supabase PostgreSQL (civic_reports) via Axios REST API
+ * DELETE /civic_reports?id=eq.<report_id>
  */
-async function updateReportStatusInSupabase(reportId, newStatus, options = {}) {
-  if (options.mockUpdate) {
+async function deleteReportFromSupabase(reportId, options = {}) {
+  if (options.mockDelete) {
     return true;
+  }
+  if (options.mockDeleteError) {
+    throw options.mockDeleteError;
   }
 
   const supabaseUrl = options.supabaseUrl || process.env.SUPABASE_URL;
@@ -193,15 +222,14 @@ async function updateReportStatusInSupabase(reportId, newStatus, options = {}) {
   const axiosClient = options.axiosInstance || axios;
   const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/civic_reports`;
 
-  await axiosClient.patch(url, { status: newStatus }, {
+  await axiosClient.delete(url, {
     params: {
       id: `eq.${reportId}`
     },
     headers: {
       'apikey': supabaseKey,
       'Authorization': `Bearer ${supabaseKey}`,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=minimal'
+      'Content-Type': 'application/json'
     }
   });
 
@@ -211,5 +239,5 @@ async function updateReportStatusInSupabase(reportId, newStatus, options = {}) {
 module.exports = {
   detectSpam,
   checkDeviceReportFrequency,
-  updateReportStatusInSupabase
+  deleteReportFromSupabase
 };
