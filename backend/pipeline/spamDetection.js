@@ -6,6 +6,24 @@ const { runSpamGate } = require('./spamGate');
  * Provides backwards-compatible detectSpam interface wrapping runSpamGate.
  */
 async function detectSpam(report, options = {}) {
+  if (!report) {
+    return {
+      error: {
+        message: 'Invalid or missing report payload',
+        code: 'INVALID_REPORT'
+      },
+      report: null,
+      spam: {
+        isSpam: null,
+        reasons: []
+      },
+      pipeline: {
+        continue: false,
+        nextStage: null
+      }
+    };
+  }
+
   try {
     const gateResult = await runSpamGate(report, options);
 
@@ -19,7 +37,7 @@ async function detectSpam(report, options = {}) {
         pipeline: {
           continue: false,
           nextStage: null,
-          action: 'rejected'
+          action: options.mockDelete ? 'deleted' : 'rejected'
         }
       };
     }

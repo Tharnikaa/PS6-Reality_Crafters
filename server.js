@@ -443,16 +443,22 @@ function mapPriorityToSeverity(priorityLevel) {
 function classifyReport(description) {
   const d = (description || '').toLowerCase();
   if (d.includes('garbage') || d.includes('waste') || d.includes('trash')) {
-    return { category: 'Garbage Overflow', department: 'Solid Waste Management' };
+    return { category: 'Garbage Overflow', department: 'Solid Waste Management', departmentKey: 'solid_waste', categoryCode: 'solid_waste' };
   }
-  if (d.includes('light') || d.includes('lamp') || d.includes('streetlight')) {
-    return { category: 'Broken Streetlight', department: 'Electrical Department' };
+  if (d.includes('light') || d.includes('lamp') || d.includes('streetlight') || d.includes('electrical')) {
+    return { category: 'Broken Streetlight', department: 'Electrical Department', departmentKey: 'electrical', categoryCode: 'electrical' };
   }
   if (d.includes('water') || d.includes('drain') || d.includes('sewage') || d.includes('leak')) {
-    return { category: 'Water & Sewage Issue', department: 'Water & Sewerage' };
+    return { category: 'Water & Sewage Issue', department: 'Water & Sewerage', departmentKey: 'water_and_sewage', categoryCode: 'water_and_sewage' };
+  }
+  if (d.includes('pothole') || d.includes('road') || d.includes('footpath') || d.includes('signal') || d.includes('traffic')) {
+    return { category: 'Pothole & Surface Damage', department: 'Highways & Roads', departmentKey: 'road_and_highways', categoryCode: 'road_and_highways' };
+  }
+  if (d.includes('unrelated') || d.includes('unclear')) {
+    return { category: 'General Civic Issue', department: 'General Administration', departmentKey: 'other', categoryCode: 'other' };
   }
   // Default — most common civic issue
-  return { category: 'Pothole & Surface Damage', department: 'Highways & Roads' };
+  return { category: 'Pothole & Surface Damage', department: 'Highways & Roads', departmentKey: 'road_and_highways', categoryCode: 'road_and_highways' };
 }
 
 // ============================================================
@@ -1266,7 +1272,23 @@ async function autoClusterExistingReports() {
 }
 
 // ── Start server ──────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`CivicResolve server running on http://localhost:${PORT}`);
-  autoClusterExistingReports();
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`CivicResolve server running on http://localhost:${PORT}`);
+    autoClusterExistingReports();
+  });
+}
+
+module.exports = {
+  app,
+  classifyReport,
+  calculateDistance,
+  calculateReportScore,
+  findNearbyFacility,
+  isHighTrafficArea,
+  calculatePriority,
+  getPriorityLevel,
+  mapPriorityToSeverity,
+  findDuplicateReports,
+  enrichReportsWithClusters
+};
