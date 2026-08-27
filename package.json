@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node tests/categorization.test.js",
     "test:spam": "node tests/spamDetection.test.js",
-    "test:gate": "node tests/spamGate.test.js"
+    "test:gate": "node tests/spamGate.test.js",
+    "test:multi": "node tests/multiLayerSpam.test.js"
   },
   "keywords": [],
   "author": "",

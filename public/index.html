@@ -1048,6 +1048,16 @@
       document.getElementById('upload-placeholder').classList.remove('hidden');
     }
 
+    // --- Persistent Device ID Generator ---
+    function getOrCreateDeviceId() {
+      let deviceId = localStorage.getItem('civic_device_id');
+      if (!deviceId) {
+        deviceId = 'dev-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+        localStorage.setItem('civic_device_id', deviceId);
+      }
+      return deviceId;
+    }
+
     // --- Submit Civic Issue to Express Backend with Offline Queue Fallback ---
     async function handleReportSubmit(e) {
       e.preventDefault();
@@ -1070,6 +1080,7 @@
         lat: currentCoords.lat,
         lng: currentCoords.lng,
         reporterPhone: userPhone || "+91 9876543210",
+        device_id: getOrCreateDeviceId(),
         timestamp: new Date().toLocaleString()
       };
 
@@ -1129,6 +1140,7 @@
       formData.append('lat', currentCoords.lat);
       formData.append('lng', currentCoords.lng);
       formData.append('reporterPhone', userPhone || "+91 9876543210");
+      formData.append('device_id', getOrCreateDeviceId());
 
       if (fileInput.files.length > 0) {
         formData.append('image', fileInput.files[0]);
@@ -1140,8 +1152,13 @@
           body: formData
         });
         const data = await res.json();
-        if (data.success) {
-          civicReports.unshift(data.report);
+        if (data.success && data.report) {
+          await fetchReports();
+          renderCitizenReports();
+        } else {
+          alert(data.message || 'Report could not be accepted.');
+          await fetchReports();
+          renderCitizenReports();
         }
       } catch (err) {
         console.error('Error submitting report:', err);

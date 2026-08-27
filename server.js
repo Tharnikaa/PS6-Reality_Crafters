@@ -82,6 +82,8 @@ function formatReportRow(row) {
                         ? new Date(row.timestamp).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
                         : 'Recently',
     reporterPhone:    row.reporter_phone,
+    device_id:        row.device_id || row.deviceId,
+    timestamp_ms:     row.timestamp_ms || (row.timestamp && !isNaN(new Date(row.timestamp).getTime()) ? new Date(row.timestamp).getTime() : Date.now()),
     // Priority fields — returned to the frontend for display
     priority_score:     row.priority_score    || 0,
     priority_level:     row.priority_level    || 'LOW',
@@ -536,7 +538,7 @@ app.post('/api/reports', upload.single('image'), async (req, res) => {
 
   // SPAM GATE EVALUATION (BEFORE DATABASE INSERT)
   try {
-    const spamGateResult = await runSpamGate(initialReport);
+    const spamGateResult = await runSpamGate(initialReport, { fallbackReports });
 
     if (spamGateResult.isSpam) {
       if (req.file && req.file.path && fs.existsSync(req.file.path)) {
@@ -555,6 +557,9 @@ app.post('/api/reports', upload.single('image'), async (req, res) => {
         message: "Report could not be accepted."
       });
     }
+
+    if (spamGateResult.phash) initialReport.image_phash = spamGateResult.phash;
+    if (spamGateResult.embedding) initialReport.embedding = spamGateResult.embedding;
   } catch (gateErr) {
     console.error('[SPAM GATE] Error evaluating spam gate:', gateErr.message);
     return res.status(500).json({ success: false, error: gateErr.message });
