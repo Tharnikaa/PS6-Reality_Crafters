@@ -352,7 +352,7 @@ function calculatePriority(reportScore, facilityScore, trafficScore) {
 function getPriorityLevel(score) {
   if (score >= 80) return 'CRITICAL';
   if (score >= 60) return 'HIGH';
-  if (score >= 40) return 'MEDIUM';
+  if (score >= 30) return 'MEDIUM';
   return 'LOW';
 }
 
@@ -668,6 +668,15 @@ app.post('/api/reports', upload.single('image'), async (req, res) => {
     priorityScore = calculatePriority(reportScore, facilityScore, trafficScore);
     priorityLevel = getPriorityLevel(priorityScore);
     severity      = mapPriorityToSeverity(priorityLevel);
+
+    // ── Incorporate AI Triage (Visual & Zone Sensitivity Escalation) ──
+    if (aiTriage && aiTriage.severity && aiTriage.severity > severity) {
+      severity = aiTriage.severity;
+      if (severity >= 5) priorityLevel = 'CRITICAL';
+      else if (severity === 4) priorityLevel = 'HIGH';
+      else if (severity === 3) priorityLevel = 'MEDIUM';
+      priorityScore = Math.max(priorityScore, severity * 18);
+    }
 
     // ── 14. Update the new report with all calculated fields ─
     const updatePayload = {
