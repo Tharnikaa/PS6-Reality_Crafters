@@ -638,6 +638,10 @@
           'Resolved': 'bg-emerald-100 text-emerald-800 border-emerald-200'
         }[rep.status] || 'bg-slate-100 text-slate-800 border-slate-200';
 
+        // Roadmap calculation logic
+        const statusSteps = ['Pending', 'Assigned', 'In Progress', 'Resolved'];
+        const currentStepIndex = statusSteps.indexOf(rep.status);
+
         const card = document.createElement('div');
         card.className = "bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between";
         card.innerHTML = `
@@ -649,15 +653,55 @@
               </div>
               <span class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${badgeClasses}">${rep.status}</span>
             </div>
+            
             <p class="text-xs text-slate-600 mb-3">${rep.description}</p>
-            <div class="flex items-center gap-1.5 text-xs text-slate-500 mb-2">
+            
+            <div class="flex items-center gap-1.5 text-xs text-slate-500 mb-3">
               <i class="fa-solid fa-location-dot text-rose-500"></i>
               <span class="truncate">${rep.location}</span>
             </div>
-            <div class="text-[11px] text-slate-400 mb-3">
+            
+            <div class="text-[11px] text-slate-400 mb-4">
               Dept: <b class="text-slate-700">${rep.department}</b> • ${rep.timestamp}
             </div>
+
+            <!-- Resolution Status Roadmap -->
+            <div class="mb-4 bg-slate-50 p-3 rounded-lg border border-slate-100">
+              <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Resolution Progress</div>
+              <div class="flex items-center justify-between relative mt-2 px-1">
+                <div class="absolute left-4 right-4 top-2 h-0.5 bg-slate-200 z-0"></div>
+                ${statusSteps.map((step, idx) => {
+                  const isCompleted = idx <= currentStepIndex;
+                  const isActive = idx === currentStepIndex;
+                  
+                  let circleBg = 'bg-slate-200 text-slate-500';
+                  let textColor = 'text-slate-400';
+                  let icon = 'fa-circle';
+
+                  if (isCompleted) {
+                    circleBg = 'bg-emerald-600 text-white';
+                    textColor = 'text-emerald-700 font-semibold';
+                    icon = 'fa-circle-check';
+                  }
+                  if (isActive) {
+                    circleBg = 'bg-indigo-600 text-white ring-4 ring-indigo-100 animate-pulse';
+                    textColor = 'text-indigo-700 font-bold';
+                    icon = 'fa-spinner fa-spin';
+                  }
+
+                  return `
+                    <div class="flex flex-col items-center z-10 relative">
+                      <div class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${circleBg}">
+                        <i class="fa-solid ${icon}"></i>
+                      </div>
+                      <span class="text-[9px] mt-1.5 ${textColor} text-center whitespace-nowrap">${step}</span>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
           </div>
+
           ${rep.status === 'Resolved' ? `
             <div class="pt-3 border-t border-slate-100 flex items-center gap-2">
               <button onclick="confirmCitizenResolve('${rep.id}')" class="flex-1 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 rounded-lg text-xs font-semibold flex items-center justify-center gap-1">
