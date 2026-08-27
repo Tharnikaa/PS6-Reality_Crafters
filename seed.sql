@@ -44,7 +44,7 @@ CREATE POLICY "Allow public update" ON civic_reports FOR UPDATE USING (true);
 CREATE POLICY "Allow public delete" ON civic_reports FOR DELETE USING (true);
 
 -- ============================================================
--- Step 4: Insert sample data (9 reports across 4 priority levels)
+-- Step 4: Insert sample data (10 reports across 4 priority levels)
 -- ============================================================
 
 INSERT INTO civic_reports (
@@ -133,4 +133,12 @@ INSERT INTO civic_reports (
   12.9815, 80.2180, 'Resolved', 2, 1,
   'https://images.unsplash.com/photo-1509114397022-ed747cca3f65?w=500&q=80',
   '+91 9988776655', 10, 'LOW', false, null, null, null, false
+),
+(
+  'REP-4071', 'Broken Streetlight', 'Electrical Department',
+  'Single streetlamp flickering intermittently at the end of the residential lane.',
+  'Mylapore 2nd Main Rd, Chennai',
+  13.0335, 80.2680, 'Pending', 2, 1,
+  'https://images.unsplash.com/photo-1509114397022-ed747cca3f65?w=500&q=80',
+  '+91 9840123456', 10, 'LOW', false, null, null, null, false
 );
