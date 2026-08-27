@@ -197,6 +197,68 @@
       </div>
     </div>
 
+    <!-- LIVE CAMERA MODAL (Viewfinder for Laptop Webcam & Mobile Browser) -->
+    <div id="camera-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+      <div class="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+        
+        <!-- Header -->
+        <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+          <span class="font-bold text-sm text-white"><i class="fa-solid fa-camera text-indigo-400 mr-2"></i>Camera</span>
+          <button type="button" onclick="closeCameraModal()" class="text-slate-400 hover:text-white w-8 h-8 rounded-full flex items-center justify-center hover:bg-slate-800">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <!-- Viewport -->
+        <div class="relative bg-black w-full aspect-[4/3] flex items-center justify-center overflow-hidden">
+          <video id="camera-video-feed" autoplay playsinline muted class="w-full h-full object-cover"></video>
+          <canvas id="camera-canvas" class="hidden w-full h-full object-cover"></canvas>
+          <div id="camera-flash" class="hidden absolute inset-0 bg-white pointer-events-none transition-opacity duration-200 opacity-90"></div>
+
+          <!-- Fallback if WebRTC is blocked/denied -->
+          <div id="camera-error-status" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-slate-900/95 text-white p-6 text-center z-10">
+            <p id="camera-error-text" class="text-sm font-semibold mb-3">Camera access denied or unavailable.</p>
+            <button type="button" onclick="triggerNativeCamera()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow">
+              Open Phone Camera App
+            </button>
+          </div>
+
+          <!-- Flip Camera Button (Front / Rear) -->
+          <button type="button" onclick="switchCameraFacingMode()" class="absolute top-3 right-3 bg-slate-900/75 hover:bg-slate-900 text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 backdrop-blur-sm border border-slate-700 shadow">
+            <i class="fa-solid fa-camera-rotate"></i>
+            <span>Flip</span>
+          </button>
+        </div>
+
+        <!-- Controls Toolbar -->
+        <div class="p-4 bg-slate-900 border-t border-slate-800">
+          <!-- Live Shutter Controls -->
+          <div id="camera-live-controls" class="flex items-center justify-between">
+            <button type="button" onclick="triggerNativeCamera()" class="text-xs text-slate-400 hover:text-indigo-400">
+              <i class="fa-solid fa-mobile-screen mr-1"></i>Native App
+            </button>
+
+            <!-- Capture Button -->
+            <button type="button" onclick="takeSnapshot()" class="w-14 h-14 rounded-full border-4 border-white/80 hover:border-white bg-rose-500 hover:bg-rose-600 active:scale-90 flex items-center justify-center text-white shadow-xl transition">
+              <i class="fa-solid fa-camera text-xl"></i>
+            </button>
+
+            <button type="button" onclick="closeCameraModal()" class="text-xs text-slate-400 hover:text-white">Cancel</button>
+          </div>
+
+          <!-- Snapshot Review Controls -->
+          <div id="camera-review-controls" class="hidden flex items-center justify-between gap-3">
+            <button type="button" onclick="retakeSnapshot()" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700">
+              Retake
+            </button>
+            <button type="button" onclick="useCapturedPhoto()" class="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-lg">
+              Use This Photo
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 3. ADMIN LOGIN VIEW -->
     <section id="admin-login-view" class="hidden max-w-md mx-auto mt-10 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
       <button onclick="showView('auth-select-view')" class="text-xs text-slate-500 hover:text-slate-800 mb-4 inline-block">&larr; Back</button>
@@ -244,24 +306,54 @@
       <!-- Tab 1: Submit Form -->
       <div id="citizen-tab-new" class="bg-white p-6 rounded-b-xl border border-slate-200 shadow-sm max-w-2xl mx-auto">
         <form onsubmit="handleReportSubmit(event)" class="space-y-5">
-          <!-- Photo Input -->
+          <!-- Photo Input (Camera & Storage Selector) -->
           <div>
             <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2" id="txt-lbl-photo">
-              1. Capture Incident Photo
+              1. Attach Incident Photo
             </label>
-            <div id="dropzone" class="flex flex-col items-center justify-center border-2 border-dashed border-slate-300 hover:border-indigo-500 rounded-xl p-4 bg-slate-50 transition cursor-pointer relative">
-              <div id="image-preview-container" class="hidden w-full h-48 rounded-lg overflow-hidden relative">
-                <img id="image-preview" src="" alt="Incident Preview" class="w-full h-full object-cover">
-                <button type="button" onclick="clearImage(event)" class="absolute top-2 right-2 bg-slate-900/80 text-white w-7 h-7 rounded-full flex items-center justify-center hover:bg-slate-900">
-                  <i class="fa-solid fa-xmark text-xs"></i>
+
+            <!-- Photo Attachment Card -->
+            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <!-- 1. Image Preview Box (Shown when photo is captured or selected) -->
+              <div id="image-preview-container" class="hidden w-full h-56 rounded-xl overflow-hidden relative border-2 border-slate-300 bg-slate-900 mb-3">
+                <img id="image-preview" src="" alt="Selected Photo" class="w-full h-full object-cover" />
+                
+                <!-- Source Badge -->
+                <div class="absolute bottom-3 left-3 bg-slate-900/80 backdrop-blur-sm text-white text-xs px-2.5 py-1 rounded-md flex items-center gap-1.5 shadow">
+                  <i class="fa-solid fa-circle-check text-emerald-400"></i>
+                  <span id="image-source-text">Photo Ready</span>
+                </div>
+
+                <!-- Remove Photo Button -->
+                <button type="button" onclick="clearSelectedImage()" title="Remove Photo" class="absolute top-3 right-3 bg-slate-900/80 hover:bg-rose-600 text-white w-8 h-8 rounded-full flex items-center justify-center transition shadow-lg">
+                  <i class="fa-solid fa-xmark text-sm"></i>
                 </button>
               </div>
-              <label id="upload-placeholder" class="flex flex-col items-center cursor-pointer w-full py-4">
-                <i class="fa-solid fa-camera text-2xl text-indigo-600 mb-2"></i>
-                <span class="text-xs font-semibold text-slate-700" id="txt-upload-tap">Tap to take photo or upload file</span>
-                <span class="text-[11px] text-slate-400">JPEG, PNG accepted</span>
-                <input type="file" id="report-img-file" accept="image/*" capture="environment" onchange="previewFile(event)" class="hidden" required>
-              </label>
+
+              <!-- 2. Two Options: Take Photo vs Upload from Storage -->
+              <div id="photo-options-container" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <!-- Option A: Take Photo -->
+                <button type="button" onclick="openCameraModal()" class="flex flex-col items-center justify-center p-4 bg-indigo-50/70 hover:bg-indigo-100 border-2 border-dashed border-indigo-300 hover:border-indigo-500 rounded-xl transition group text-center cursor-pointer">
+                  <div class="w-12 h-12 rounded-full bg-indigo-600 text-white flex items-center justify-center mb-2 group-hover:scale-105 transition shadow">
+                    <i class="fa-solid fa-camera text-lg"></i>
+                  </div>
+                  <span class="font-bold text-slate-800 text-sm">Take Photo</span>
+                  <span class="text-[11px] text-slate-500 mt-0.5">Use camera</span>
+                </button>
+
+                <!-- Option B: Upload from Storage -->
+                <button type="button" onclick="triggerStoragePicker()" class="flex flex-col items-center justify-center p-4 bg-white hover:bg-slate-100 border-2 border-dashed border-slate-300 hover:border-indigo-400 rounded-xl transition group text-center cursor-pointer">
+                  <div class="w-12 h-12 rounded-full bg-slate-800 text-white flex items-center justify-center mb-2 group-hover:scale-105 transition shadow">
+                    <i class="fa-solid fa-folder-open text-lg"></i>
+                  </div>
+                  <span class="font-bold text-slate-800 text-sm">From Storage</span>
+                  <span class="text-[11px] text-slate-500 mt-0.5">Gallery / Files</span>
+                </button>
+              </div>
+
+              <!-- Hidden File Inputs -->
+              <input type="file" id="storage-file-input" accept="image/*" onchange="onStorageFileSelected(event)" class="hidden" />
+              <input type="file" id="mobile-camera-input" accept="image/*" capture="environment" onchange="onNativeCameraCaptured(event)" class="hidden" />
             </div>
           </div>
 
@@ -1323,6 +1415,187 @@
       document.getElementById('upload-placeholder').classList.remove('hidden');
     }
 
+    // --- Camera & Storage Photo Selector Logic ---
+    let selectedImageFile = null;
+    let activeMediaStream = null;
+    let cameraFacingMode = 'environment'; // 'environment' (back) or 'user' (front)
+
+    // 1. Storage Picker
+    function triggerStoragePicker() {
+      const input = document.getElementById('storage-file-input');
+      if (input) {
+        input.value = '';
+        input.click();
+      }
+    }
+
+    function onStorageFileSelected(e) {
+      const file = e.target.files && e.target.files[0];
+      if (file) {
+        selectedImageFile = file;
+        renderPreview(file, 'Storage / Gallery');
+      }
+    }
+
+    // 2. Native Mobile Camera Fallback
+    function triggerNativeCamera() {
+      const input = document.getElementById('mobile-camera-input');
+      if (input) {
+        input.value = '';
+        input.click();
+      }
+    }
+
+    function onNativeCameraCaptured(e) {
+      const file = e.target.files && e.target.files[0];
+      if (file) {
+        selectedImageFile = file;
+        renderPreview(file, 'Camera Photo');
+        closeCameraModal();
+      }
+    }
+
+    // 3. Live Camera Viewfinder Modal
+    async function openCameraModal() {
+      const modal = document.getElementById('camera-modal');
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      document.getElementById('camera-live-controls').classList.remove('hidden');
+      document.getElementById('camera-review-controls').classList.add('hidden');
+      document.getElementById('camera-canvas').classList.add('hidden');
+      document.getElementById('camera-video-feed').classList.remove('hidden');
+      document.getElementById('camera-error-status').classList.add('hidden');
+      await startCameraStream(cameraFacingMode);
+    }
+
+    async function startCameraStream(facingMode) {
+      const video = document.getElementById('camera-video-feed');
+      const errorStatus = document.getElementById('camera-error-status');
+      const errorText = document.getElementById('camera-error-text');
+
+      if (activeMediaStream) {
+        activeMediaStream.getTracks().forEach(track => track.stop());
+        activeMediaStream = null;
+      }
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        if (errorStatus) errorStatus.classList.remove('hidden');
+        if (errorText) errorText.innerText = 'Live preview not supported on this browser. Tap below for phone camera.';
+        return;
+      }
+
+      try {
+        activeMediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: facingMode }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+          audio: false
+        });
+        video.srcObject = activeMediaStream;
+        await video.play().catch(() => {});
+        if (errorStatus) errorStatus.classList.add('hidden');
+      } catch (err) {
+        try {
+          activeMediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          video.srcObject = activeMediaStream;
+          await video.play().catch(() => {});
+          if (errorStatus) errorStatus.classList.add('hidden');
+        } catch (fallbackErr) {
+          if (errorStatus) errorStatus.classList.remove('hidden');
+          if (errorText) {
+            errorText.innerText = fallbackErr.name === 'NotAllowedError'
+              ? 'Camera permission denied. Tap below to use native camera.'
+              : 'Camera stream unavailable. Tap below to use native camera.';
+          }
+        }
+      }
+    }
+
+    async function switchCameraFacingMode() {
+      cameraFacingMode = cameraFacingMode === 'environment' ? 'user' : 'environment';
+      await startCameraStream(cameraFacingMode);
+    }
+
+    function takeSnapshot() {
+      const video = document.getElementById('camera-video-feed');
+      const canvas = document.getElementById('camera-canvas');
+      const flash = document.getElementById('camera-flash');
+
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Flash animation
+      if (flash) {
+        flash.classList.remove('hidden');
+        setTimeout(() => flash.classList.add('hidden'), 150);
+      }
+
+      video.classList.add('hidden');
+      canvas.classList.remove('hidden');
+      document.getElementById('camera-live-controls').classList.add('hidden');
+      document.getElementById('camera-review-controls').classList.remove('hidden');
+    }
+
+    function retakeSnapshot() {
+      document.getElementById('camera-canvas').classList.add('hidden');
+      document.getElementById('camera-video-feed').classList.remove('hidden');
+      document.getElementById('camera-live-controls').classList.remove('hidden');
+      document.getElementById('camera-review-controls').classList.add('hidden');
+    }
+
+    function useCapturedPhoto() {
+      const canvas = document.getElementById('camera-canvas');
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const file = new File([blob], `camera-photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
+          selectedImageFile = file;
+          renderPreview(file, 'Live Camera');
+          closeCameraModal();
+        }
+      }, 'image/jpeg', 0.92);
+    }
+
+    function closeCameraModal() {
+      const modal = document.getElementById('camera-modal');
+      if (modal) modal.classList.add('hidden');
+      if (activeMediaStream) {
+        activeMediaStream.getTracks().forEach(track => track.stop());
+        activeMediaStream = null;
+      }
+    }
+
+    // Preview & Clear
+    function renderPreview(file, label) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const previewImg = document.getElementById('image-preview');
+        const sourceText = document.getElementById('image-source-text');
+        const previewContainer = document.getElementById('image-preview-container');
+        const optionsContainer = document.getElementById('photo-options-container');
+
+        if (previewImg) previewImg.src = e.target.result;
+        if (sourceText) sourceText.innerText = label;
+        if (previewContainer) previewContainer.classList.remove('hidden');
+        if (optionsContainer) optionsContainer.classList.add('hidden');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearSelectedImage() {
+      selectedImageFile = null;
+      const storageInput = document.getElementById('storage-file-input');
+      const mobileInput = document.getElementById('mobile-camera-input');
+      const previewImg = document.getElementById('image-preview');
+      const previewContainer = document.getElementById('image-preview-container');
+      const optionsContainer = document.getElementById('photo-options-container');
+
+      if (storageInput) storageInput.value = '';
+      if (mobileInput) mobileInput.value = '';
+      if (previewImg) previewImg.src = '';
+      if (previewContainer) previewContainer.classList.add('hidden');
+      if (optionsContainer) optionsContainer.classList.remove('hidden');
+    }
+
     // --- Persistent Device ID Generator ---
     function getOrCreateDeviceId() {
       let deviceId = localStorage.getItem('civic_device_id');
@@ -1337,8 +1610,11 @@
     async function handleReportSubmit(e) {
       e.preventDefault();
       const desc = document.getElementById('report-desc').value;
-      const fileInput = document.getElementById('report-img-file');
       const submitBtn = document.getElementById('submit-btn');
+
+      const storageInput = document.getElementById('storage-file-input');
+      const mobileInput = document.getElementById('mobile-camera-input');
+      const targetFile = selectedImageFile || (storageInput && storageInput.files[0]) || (mobileInput && mobileInput.files[0]);
 
       // Convert image file to Base64 helper
       const getBase64 = (file) => new Promise((resolve, reject) => {
@@ -1364,9 +1640,9 @@
         submitBtn.disabled = true;
         submitBtn.innerHTML = `<i class="fa-solid fa-wifi-slash"></i> Offline. Queuing...`;
 
-        if (fileInput.files.length > 0) {
+        if (targetFile) {
           try {
-            reportPayload.image = await getBase64(fileInput.files[0]);
+            reportPayload.image = await getBase64(targetFile);
           } catch (err) {
             console.error("Error reading file for offline storage:", err);
           }
@@ -1376,7 +1652,6 @@
           await queueOfflineReport(reportPayload);
           alert("Connection offline. Your report has been queued locally and will submit automatically when you reconnect.");
           
-          // Visual feedback in list
           const isGarbage = desc.toLowerCase().includes('garbage') || desc.toLowerCase().includes('waste');
           const isLight = desc.toLowerCase().includes('light') || desc.toLowerCase().includes('lamp');
           
@@ -1400,7 +1675,7 @@
           submitBtn.innerHTML = `<i class="fa-solid fa-paper-plane text-sm"></i> <span>${i18n[currentLang].btnSubmit}</span>`;
 
           document.getElementById('report-desc').value = '';
-          clearImage(e);
+          clearSelectedImage();
           switchCitizenTab('my-reports');
         }
         return;
@@ -1417,8 +1692,8 @@
       formData.append('reporterPhone', userPhone || "+91 9876543210");
       formData.append('device_id', getOrCreateDeviceId());
 
-      if (fileInput.files.length > 0) {
-        formData.append('image', fileInput.files[0]);
+      if (targetFile) {
+        formData.append('image', targetFile);
       }
 
       try {
