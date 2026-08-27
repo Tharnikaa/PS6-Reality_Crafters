@@ -1202,8 +1202,13 @@
                 <span class="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">${rep.id}</span>
                 <h3 class="font-bold text-slate-900 mt-1 text-sm">${displayCategory}</h3>
               </div>
-              <div class="flex flex-col items-end gap-1">
-                <span class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${badgeClasses}">${displayStatus}</span>
+              <div class="flex flex-col items-end gap-1.5">
+                <div class="flex items-center gap-1.5">
+                  <span class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${badgeClasses}">${displayStatus}</span>
+                  <button onclick="deleteReport('${rep.id}')" class="text-slate-400 hover:text-rose-600 transition p-0.5" title="Delete Report">
+                    <i class="fa-solid fa-trash-can text-xs"></i>
+                  </button>
+                </div>
                 <div class="flex items-center gap-1.5">
                   <span class="w-5 h-2 rounded-full border border-black/10 inline-block shadow-sm" style="background-color: ${sevColor.hex};"></span>
                   <span class="text-[9px] font-bold px-1.5 py-0.5 rounded border ${sevColor.badgeBg}">Sev ${rep.severity}/5</span>
@@ -1283,6 +1288,31 @@
     async function reopenCitizenIssue(id) {
       await updateTicketStatus(id, 'In Progress');
       renderCitizenReports();
+    }
+
+    async function deleteReport(id) {
+      if (!confirm("Are you sure you want to delete this report? This action cannot be undone.")) return;
+      try {
+        const res = await fetch(`/api/reports/${id}`, {
+          method: 'DELETE'
+        });
+        const data = await res.json();
+        if (data.success) {
+          civicReports = civicReports.filter(r => r.id !== id);
+          renderCitizenReports();
+          
+          // Refresh admin dashboard if it is visible
+          const adminView = document.getElementById('admin-app-view');
+          if (adminView && !adminView.classList.contains('hidden')) {
+            fetchAndRenderAdminQueue();
+          }
+        } else {
+          alert("Failed to delete report: " + data.message);
+        }
+      } catch (err) {
+        console.error("Error deleting report:", err);
+        alert("Failed to delete report due to network error.");
+      }
     }
 
     // --- Admin Dashboard Rendering ---
