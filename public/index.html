@@ -1187,10 +1187,39 @@
     // --- Render Citizen Reports ---
     function renderCitizenReports() {
       const container = document.getElementById('citizen-tab-my');
-      document.getElementById('citizen-report-count').innerText = civicReports.length;
       container.innerHTML = '';
 
+      if (!civicReports || civicReports.length === 0) {
+        document.getElementById('citizen-report-count').innerText = '0';
+        container.innerHTML = `<p class="text-slate-400 text-sm text-center py-10">No reported issues found.</p>`;
+        return;
+      }
+
+      // Group reports by issue_id so merged reports display as ONE single card
+      const issueMap = {};
       civicReports.forEach(rep => {
+        const issueKey = rep.issue_id || `ISSUE_${rep.id}`;
+        if (!issueMap[issueKey]) {
+          issueMap[issueKey] = [];
+        }
+        issueMap[issueKey].push(rep);
+      });
+
+      const uniqueIssues = Object.keys(issueMap).map(key => {
+        const list = issueMap[key];
+        const primary = list[0];
+        const complaintCount = Math.max(list.length, primary.duplicatesCount || 1);
+        return {
+          ...primary,
+          issue_id: key,
+          totalComplaints: complaintCount,
+          subReports: list
+        };
+      });
+
+      document.getElementById('citizen-report-count').innerText = uniqueIssues.length.toString();
+
+      uniqueIssues.forEach(rep => {
         const badgeClasses = {
           'Pending': 'bg-amber-100 text-amber-800 border-amber-200',
           'Assigned': 'bg-blue-100 text-blue-800 border-blue-200',
@@ -1198,7 +1227,6 @@
           'Resolved': 'bg-emerald-100 text-emerald-800 border-emerald-200'
         }[rep.status] || 'bg-slate-100 text-slate-800 border-slate-200';
 
-        // Roadmap calculation logic
         const statusSteps = ['Pending', 'Assigned', 'In Progress', 'Resolved'];
         const currentStepIndex = statusSteps.indexOf(rep.status);
 
@@ -1214,19 +1242,21 @@
 
         card.innerHTML = `
           <div>
-            <div class="flex items-start justify-between gap-2 mb-2">
+            <div class="flex items-start justify-between gap-2 mb-3">
               <div>
-                <div class="flex items-center gap-1.5 flex-wrap">
-                  <span class="text-xs font-mono font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">${rep.id}</span>
-                  <span class="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">${rep.issue_id || 'ISSUE_' + rep.id}</span>
+                <!-- SINGLE CLEAN TAG SHOWING REGISTERED COMPLAINTS COUNT -->
+                <div class="mb-1">
+                  ${rep.totalComplaints > 1 
+                    ? `<span class="text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5 shadow-sm"><i class="fa-solid fa-users text-xs text-amber-700"></i> ${rep.totalComplaints} Complaints Registered</span>`
+                    : `<span class="text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5"><i class="fa-solid fa-user text-xs text-slate-500"></i> 1 Complaint Registered</span>`
+                  }
                 </div>
-                <h3 class="font-bold text-slate-900 mt-1 text-sm">${displayCategory}</h3>
-                ${rep.duplicatesCount > 1 ? `<div class="mt-1"><span class="text-[10px] font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full inline-flex items-center gap-1"><i class="fa-solid fa-layer-group text-[9px]"></i> Merged Issue (${rep.duplicatesCount} citizens reported)</span></div>` : ''}
+                <h3 class="font-bold text-slate-900 text-base mt-1.5">${displayCategory}</h3>
               </div>
               <div class="flex flex-col items-end gap-1.5">
                 <div class="flex items-center gap-1.5">
                   <span class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${badgeClasses}">${displayStatus}</span>
-                  <button onclick="deleteReport('${rep.id}')" class="text-slate-400 hover:text-rose-600 transition p-0.5" title="Delete Report">
+                  <button onclick="deleteReport('${rep.id}')" class="text-slate-400 hover:text-rose-600 transition p-0.5" title="Delete Issue">
                     <i class="fa-solid fa-trash-can text-xs"></i>
                   </button>
                 </div>
@@ -1349,11 +1379,30 @@
 
       const filtered = civicReports.filter(r => filter === 'All' ? true : r.department === filter);
 
+      // Group filtered reports by issue_id for unique queue items
+      const issueMap = {};
+      filtered.forEach(r => {
+        const key = r.issue_id || `ISSUE_${r.id}`;
+        if (!issueMap[key]) issueMap[key] = [];
+        issueMap[key].push(r);
+      });
+
+      const uniqueAdminIssues = Object.keys(issueMap).map(key => {
+        const list = issueMap[key];
+        const primary = list[0];
+        const total = Math.max(list.length, primary.duplicatesCount || 1);
+        return {
+          ...primary,
+          issue_id: key,
+          totalComplaints: total
+        };
+      });
+
       // Metrics updates
-      document.getElementById('metric-open-count').innerText = civicReports.filter(r => r.status !== 'Resolved').length;
+      document.getElementById('metric-open-count').innerText = uniqueAdminIssues.filter(r => r.status !== 'Resolved').length;
       document.getElementById('metric-duplicates-count').innerText = civicReports.reduce((acc, curr) => acc + (curr.duplicatesCount - 1), 0);
 
-      filtered.forEach(rep => {
+      uniqueAdminIssues.forEach(rep => {
         const isSelected = selectedTicketId === rep.id;
         const sevColor = getSeverityColor(rep.severity);
         const item = document.createElement('div');
@@ -1381,9 +1430,9 @@
 
         item.innerHTML = `
           <div class="flex items-center justify-between mb-1">
-            <span class="text-xs font-mono font-bold text-slate-700">${rep.id}</span>
+            <span class="text-xs font-mono font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded">${rep.issue_id}</span>
             <div class="flex items-center gap-1.5">
-              ${rep.duplicatesCount > 1 ? `<span class="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">+${rep.duplicatesCount - 1} others reported</span>` : ''}
+              ${rep.totalComplaints > 1 ? `<span class="text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-full"><i class="fa-solid fa-users text-[9px] mr-1"></i>${rep.totalComplaints} Complaints</span>` : ''}
               <span class="w-5 h-2 rounded-full border border-black/10 inline-block shadow-sm" style="background-color: ${sevColor.hex};"></span>
               <span class="text-[10px] font-bold px-1.5 py-0.5 rounded border ${sevColor.badgeBg}">Sev ${rep.severity}/5</span>
             </div>
