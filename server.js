@@ -28,7 +28,7 @@ if (supabaseUrl && supabaseKey && !supabaseUrl.includes('your-supabase-project')
   console.warn('Supabase URL/Key missing. Operating with in-memory fallback.');
 }
 
-const { detectSpam } = require('./backend/pipeline/spamDetection');
+const { runSpamGate } = require('./backend/pipeline/spamGate');
 
 // ── Multer — memory storage (required for Vercel serverless) ─
 // Vercel does not allow writing to disk, so we keep the file
@@ -534,32 +534,30 @@ app.post('/api/reports', upload.single('image'), async (req, res) => {
   const deviceIdentifier = req.body.device_id || req.body.deviceId || req.headers['x-device-id'] || 'device-default';
   initialReport.device_id = deviceIdentifier;
 
-  // STAGE 1: SPAM DETECTION PIPELINE
-  const spamResult = await detectSpam(initialReport);
+  // SPAM GATE EVALUATION (BEFORE DATABASE INSERT)
+  try {
+    const spamGateResult = await runSpamGate(initialReport);
 
-  if (spamResult.error) {
-    if (spamResult.error.code === 'SPAM_CLEANUP_FAILED') {
-      return res.status(500).json({ success: false, error: 'Unable to complete spam cleanup.' });
-    }
-    return res.status(500).json({ success: false, error: spamResult.error.message });
-  }
-
-  // IF SPAM -> REJECT REQUEST AND DO NOT INSERT REPORT INTO DATABASE
-  if (spamResult.spam && spamResult.spam.isSpam) {
-    if (req.file && req.file.path && fs.existsSync(req.file.path)) {
-      try {
-        fs.unlinkSync(req.file.path);
-      } catch (unlinkErr) {
-        console.warn('[SPAM] Warning: Failed to clean up orphaned local image:', unlinkErr.message);
+    if (spamGateResult.isSpam) {
+      if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (unlinkErr) {
+          console.warn('[SPAM GATE] Warning: Failed to clean up local file:', unlinkErr.message);
+        }
       }
-    }
 
-    return res.status(400).json({
-      success: false,
-      spam: true,
-      deleted: true,
-      message: 'Report rejected.'
-    });
+      // HTTP 422 UNPROCESSABLE ENTITY — REJECTED BEFORE DB INSERT
+      return res.status(422).json({
+        success: false,
+        accepted: false,
+        spam: true,
+        message: "Report could not be accepted."
+      });
+    }
+  } catch (gateErr) {
+    console.error('[SPAM GATE] Error evaluating spam gate:', gateErr.message);
+    return res.status(500).json({ success: false, error: gateErr.message });
   }
 
   // ── 4. SAVE THE REPORT FIRST ─────────────────────────────

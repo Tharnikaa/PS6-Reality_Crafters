@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "node tests/categorization.test.js",
-    "test:spam": "node tests/spamDetection.test.js"
+    "test:spam": "node tests/spamDetection.test.js",
+    "test:gate": "node tests/spamGate.test.js"
   },
   "keywords": [],
   "author": "",
