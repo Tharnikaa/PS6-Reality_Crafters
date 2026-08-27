@@ -636,28 +636,29 @@ function enrichReportsWithClusters(rawReports) {
     const loc = calculateIssueLocation(c.reports);
     const count = c.reports.length;
     const rep = c.reports[0];
-    const reportScore = calculateReportScore(count);
     const facilityResult = findNearbyFacility(loc.lat, loc.lng);
     const isTraffic = isHighTrafficArea(rep.location || '');
-    const facilityScore = facilityResult.found ? 100 : 0;
-    const trafficScore = isTraffic ? 100 : 0;
-    let priorityScore = calculatePriority(reportScore, facilityScore, trafficScore);
 
-    c.reports.forEach(rItem => {
-      if (rItem.severity && rItem.severity >= 4) {
-        priorityScore = Math.max(priorityScore, rItem.severity * 18);
-      }
+    const pResult = calculateFinalPriority({
+      severity: rep.severity || 3,
+      duplicatesCount: count,
+      zoneType: facilityResult.found ? `${facilityResult.type} Zone` : '',
+      location: rep.location || ''
     });
 
-    const priorityLevel = getPriorityLevel(priorityScore);
-    const severity = mapPriorityToSeverity(priorityLevel);
+    const priorityScore = pResult.priorityScore;
+    const priorityLevel = pResult.priority.startsWith('Critical') ? 'CRITICAL' : (pResult.priority.startsWith('High') ? 'HIGH' : 'MEDIUM');
+    const severity = Math.max(rep.severity || 3, mapPriorityToSeverity(priorityLevel));
 
     c.reports.forEach(rItem => {
       rItem.issue_id = c.issue_id;
       rItem.duplicates_count = count;
       rItem.duplicatesCount = count;
-      rItem.priority_score = priorityScore;
+      rItem.priority = pResult.priority;
+      rItem.priority_score = pResult.priorityScore;
       rItem.priority_level = priorityLevel;
+      rItem.priority_reason = pResult.priorityReason;
+      rItem.priority_factors = pResult.factors;
       rItem.severity = Math.max(rItem.severity || 2, severity);
     });
 
@@ -1326,14 +1327,17 @@ async function autoClusterExistingReports() {
       if (cluster.length > 1) {
         const sharedIssueId = repA.issue_id || `ISSUE_${repA.id}`;
         const count = cluster.length;
-        const reportScore = calculateReportScore(count);
         const facilityResult = findNearbyFacility(repA.lat, repA.lng);
-        const isTraffic = isHighTrafficArea(repA.location);
-        const facilityScore = facilityResult.found ? 100 : 0;
-        const trafficScore = isTraffic ? 100 : 0;
-        const score = calculatePriority(reportScore, facilityScore, trafficScore);
-        const level = getPriorityLevel(score);
-        const sev = mapPriorityToSeverity(level);
+        const pResult = calculateFinalPriority({
+          severity: repA.severity || 3,
+          duplicatesCount: count,
+          zoneType: facilityResult.found ? `${facilityResult.type} Zone` : '',
+          location: repA.location || ''
+        });
+
+        const score = pResult.priorityScore;
+        const level = pResult.priority.startsWith('Critical') ? 'CRITICAL' : (pResult.priority.startsWith('High') ? 'HIGH' : 'MEDIUM');
+        const sev = Math.max(repA.severity || 3, mapPriorityToSeverity(level));
 
         for (const item of cluster) {
           item.issue_id = sharedIssueId;
