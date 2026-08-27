@@ -178,9 +178,12 @@
             <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1" id="txt-lbl-loc">
               3. Incident Location (GPS)
             </label>
-            <div class="flex items-center gap-2 px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-lg text-xs text-slate-700">
-              <i class="fa-solid fa-location-dot text-rose-500"></i>
-              <span id="geo-location-display" class="truncate font-medium">Detecting GPS location...</span>
+            <div class="flex items-center gap-2 px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-xs text-slate-700">
+              <i class="fa-solid fa-location-dot text-rose-500 shrink-0"></i>
+              <span id="geo-location-display" class="truncate font-medium flex-1">Detecting GPS location...</span>
+              <button type="button" onclick="detectGPSLocation()" class="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded text-xs font-medium shrink-0 flex items-center gap-1">
+                <i class="fa-solid fa-crosshairs text-indigo-600"></i> Relocate
+              </button>
             </div>
           </div>
 
@@ -404,21 +407,62 @@
       showView('admin-app-view');
     }
 
-    // --- Geolocation Detector ---
+    // --- Geolocation Detector with High Accuracy & Reverse Geocoding ---
     function initGeolocation() {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            currentCoords.lat = parseFloat(pos.coords.latitude.toFixed(4));
-            currentCoords.lng = parseFloat(pos.coords.longitude.toFixed(4));
-            currentCoords.text = `Lat: ${currentCoords.lat}, Lng: ${currentCoords.lng} (Auto-Locked)`;
-            document.getElementById('geo-location-display').innerText = currentCoords.text;
-          },
-          () => {
-            document.getElementById('geo-location-display').innerText = "Anna Salai, Chennai (GPS Default)";
-          }
-        );
+      detectGPSLocation();
+    }
+
+    function detectGPSLocation() {
+      const displayEl = document.getElementById('geo-location-display');
+      if (!navigator.geolocation) {
+        displayEl.innerText = "Geolocation is not supported by your browser.";
+        return;
       }
+
+      displayEl.innerText = "Locating via GPS...";
+
+      const geoOptions = {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      };
+
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          currentCoords.lat = parseFloat(pos.coords.latitude.toFixed(6));
+          currentCoords.lng = parseFloat(pos.coords.longitude.toFixed(6));
+          currentCoords.text = `Lat: ${currentCoords.lat}, Lng: ${currentCoords.lng}`;
+
+          displayEl.innerText = `${currentCoords.text} (Fetching address...)`;
+
+          // Reverse Geocoding via OpenStreetMap Nominatim
+          try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${currentCoords.lat}&lon=${currentCoords.lng}`);
+            const data = await response.json();
+            if (data && data.display_name) {
+              const shortAddress = data.display_name.split(',').slice(0, 4).join(',');
+              currentCoords.text = `${shortAddress} (${currentCoords.lat}, ${currentCoords.lng})`;
+            }
+          } catch (err) {
+            console.warn('Reverse geocoding error:', err);
+          }
+
+          displayEl.innerText = currentCoords.text;
+        },
+        (err) => {
+          console.warn('GPS position error:', err);
+          let msg = "Anna Salai, Chennai (GPS Default)";
+          if (err.code === err.PERMISSION_DENIED) {
+            msg = "Location permission denied. Please allow location access in your browser.";
+          } else if (err.code === err.POSITION_UNAVAILABLE) {
+            msg = "Location information unavailable. Retrying...";
+          } else if (err.code === err.TIMEOUT) {
+            msg = "Location request timed out. Click Relocate to try again.";
+          }
+          displayEl.innerText = msg;
+        },
+        geoOptions
+      );
     }
 
     // --- Offline Network Monitor ---
