@@ -785,13 +785,21 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: adminEmail, password: adminPass, department: adminDept })
         });
-        const data = await res.json();
-        if (!data.success) {
+
+        let data = {};
+        try {
+          data = await res.json();
+        } catch (pErr) {
+          data = { success: false, message: 'Invalid response format.' };
+        }
+
+        if (!res.ok || !data.success) {
+          const msg = data.message || 'Access denied: Invalid staff email ID or password. Unauthorized users cannot enter.';
           if (errEl) {
-            errEl.innerText = data.message || 'Invalid credentials';
+            errEl.innerText = msg;
             errEl.classList.remove('hidden');
           } else {
-            alert(data.message || 'Invalid staff credentials');
+            alert(msg);
           }
           return;
         }
@@ -799,8 +807,14 @@
         document.getElementById('admin-filter-dept').value = adminDept;
         showView('admin-app-view');
       } catch (err) {
-        console.error('Staff login error:', err);
-        alert('Server connection error. Please check backend.');
+        console.error('Staff login fetch error:', err);
+        const msg = 'Access denied: Invalid staff email ID or password. Unauthorized users cannot enter.';
+        if (errEl) {
+          errEl.innerText = msg;
+          errEl.classList.remove('hidden');
+        } else {
+          alert(msg);
+        }
       }
     }
 
