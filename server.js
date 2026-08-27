@@ -1,13 +1,22 @@
+// ============================================================
+// CivicResolve — Express.js Backend
+// ============================================================
+// Written in plain JavaScript + Express + Supabase/PostgreSQL.
+// No ORMs, no ML libraries, no complex GIS packages.
+// Every important function is written out step-by-step so it
+// can be explained clearly to hackathon judges.
+// ============================================================
+
 require('dotenv').config();
 const express = require('express');
-const path = require('path');
-const multer = require('multer');
+const path    = require('path');
+const multer  = require('multer');
 const { createClient } = require('@supabase/supabase-js');
 
-const app = express();
+const app  = express();
 const PORT = process.env.PORT || 3000;
 
-// Initialize Supabase Client
+// ── Supabase Client ──────────────────────────────────────────
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
 let supabase = null;
@@ -16,813 +25,894 @@ if (supabaseUrl && supabaseKey && !supabaseUrl.includes('your-supabase-project')
   supabase = createClient(supabaseUrl, supabaseKey);
   console.log('Supabase database integration initialized.');
 } else {
-  console.warn('Supabase URL/Key missing or default. Operating with mock database fallback.');
+  console.warn('Supabase URL/Key missing. Operating with in-memory fallback.');
 }
 
-// Configure multer with memory storage (works on Vercel / serverless environments)
+// ── Multer — memory storage (required for Vercel serverless) ─
+// Vercel does not allow writing to disk, so we keep the file
+// in memory and upload it straight to Supabase Storage.
 const upload = multer({ storage: multer.memoryStorage() });
 
-/**
- * Uploads an image buffer to Supabase Storage and returns its public URL.
- * Falls back to a placeholder URL if Supabase is not configured.
- * @param {Buffer} buffer - File buffer from multer memoryStorage
- * @param {string} originalname - Original filename for extension detection
- * @returns {Promise<string>} Public URL of the uploaded image
- */
-async function uploadImageToSupabase(buffer, originalname) {
-  if (!supabase) {
-    return 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=500&q=80';
-  }
-  const ext = path.extname(originalname) || '.jpg';
-  const filename = `report-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-  const { error } = await supabase.storage
-    .from('report-images')
-    .upload(filename, buffer, { contentType: 'image/jpeg', upsert: false });
-  if (error) {
-    console.error('Supabase Storage upload error:', error.message);
-    return 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=500&q=80';
-  }
-  const { data: publicData } = supabase.storage.from('report-images').getPublicUrl(filename);
-  return publicData.publicUrl;
-}
-
-// Middleware
+// ── Middleware ───────────────────────────────────────────────
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// In-Memory Fallback Reports Data
-// In-Memory Fallback Reports Data
+// ============================================================
+// IN-MEMORY FALLBACK DATA
+// Used only when Supabase is not configured (local dev).
+// In production the Supabase DB is used instead.
+// ============================================================
 let fallbackReports = [
   {
-    id: "REP-4091",
-    category: "Pothole & Surface Damage",
-    department: "Highways & Roads",
-    description: "Dangerous crater-sized pothole right after the signal. Causing severe traffic skids.",
-    location: "Anna Salai, Near Spencers Plaza, Chennai",
+    id: 'REP-4091',
+    category: 'Pothole & Surface Damage',
+    department: 'Highways & Roads',
+    description: 'Dangerous crater-sized pothole right after the signal. Causing severe traffic skids.',
+    location: 'Anna Salai, Near Spencers Plaza, Chennai',
     lat: 13.0604,
     lng: 80.2496,
-    status: "In Progress",
-    severity: 4,
+    status: 'In Progress',
+    severity: 5,
     duplicatesCount: 5,
-    imageUrl: "https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=500&q=80",
-    timestamp: "27 Aug 2026, 09:15 AM",
-    reporterPhone: "+91 9876543210",
-    issue_id: 1
+    imageUrl: 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=500&q=80',
+    timestamp: '27 Aug 2026, 09:15 AM',
+    reporterPhone: '+91 9876543210',
+    priority_score: 95,
+    priority_level: 'CRITICAL',
+    nearby_facility: true,
+    facility_type: 'HOSPITAL',
+    facility_name: "Apollo Children's Hospital",
+    facility_distance: 0,
+    high_traffic_area: true
   },
   {
-    id: "REP-4088",
-    category: "Garbage Overflow",
-    department: "Solid Waste Management",
-    description: "Community bin overflowing for 3 days. Blocking sidewalk completely.",
-    location: "T. Nagar 3rd Main Rd, Chennai",
+    id: 'REP-4088',
+    category: 'Garbage Overflow',
+    department: 'Solid Waste Management',
+    description: 'Community bin overflowing for 3 days. Blocking sidewalk completely.',
+    location: 'T. Nagar 3rd Main Rd, Chennai',
     lat: 13.0418,
     lng: 80.2341,
-    status: "Pending",
-    severity: 3,
+    status: 'Pending',
+    severity: 4,
     duplicatesCount: 2,
-    imageUrl: "https://images.unsplash.com/photo-1605600659908-0ef719419d41?w=500&q=80",
-    timestamp: "27 Aug 2026, 10:30 AM",
-    reporterPhone: "+91 9123456789",
-    issue_id: 2
+    imageUrl: 'https://images.unsplash.com/photo-1605600659908-0ef719419d41?w=500&q=80',
+    timestamp: '27 Aug 2026, 10:30 AM',
+    reporterPhone: '+91 9123456789',
+    priority_score: 70,
+    priority_level: 'HIGH',
+    nearby_facility: true,
+    facility_type: 'SCHOOL',
+    facility_name: 'T. Nagar Girls Higher Secondary School',
+    facility_distance: 60,
+    high_traffic_area: true
   },
   {
-    id: "REP-4072",
-    category: "Broken Streetlight",
-    department: "Electrical Department",
-    description: "Streetlights not functioning for the entire block. Complete darkness.",
-    location: "Velachery Bypass Rd, Chennai",
+    id: 'REP-4072',
+    category: 'Broken Streetlight',
+    department: 'Electrical Department',
+    description: 'Streetlights not functioning for the entire block. Complete darkness at night.',
+    location: 'Velachery Bypass Rd, Chennai',
     lat: 12.9815,
     lng: 80.2180,
-    status: "Resolved",
+    status: 'Resolved',
     severity: 2,
     duplicatesCount: 1,
-    imageUrl: "https://images.unsplash.com/photo-1509114397022-ed747cca3f65?w=500&q=80",
-    timestamp: "26 Aug 2026, 06:45 PM",
-    reporterPhone: "+91 9988776655",
-    issue_id: 3
+    imageUrl: 'https://images.unsplash.com/photo-1509114397022-ed747cca3f65?w=500&q=80',
+    timestamp: '26 Aug 2026, 06:45 PM',
+    reporterPhone: '+91 9988776655',
+    priority_score: 20,
+    priority_level: 'LOW',
+    nearby_facility: false,
+    facility_type: null,
+    facility_name: null,
+    facility_distance: null,
+    high_traffic_area: false
   }
 ];
 
-let fallbackIssues = [
-  {
-    id: 1,
-    category: "Pothole & Surface Damage",
-    department: "Highways & Roads",
-    latitude: 13.0604,
-    longitude: 80.2496,
-    location: "Anna Salai, Near Spencers Plaza, Chennai",
-    report_count: 5,
-    nearby_facility: true,
-    facility_type: "HOSPITAL",
-    facility_name: "Apollo Children's Hospital",
-    facility_distance: 0.0,
-    high_traffic_area: true,
-    priority_score: 95,
-    priority_level: "CRITICAL",
-    status: "OPEN",
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  },
-  {
-    id: 2,
-    category: "Garbage Overflow",
-    department: "Solid Waste Management",
-    latitude: 13.0418,
-    longitude: 80.2341,
-    location: "T. Nagar 3rd Main Rd, Chennai",
-    report_count: 2,
-    nearby_facility: true,
-    facility_type: "SCHOOL",
-    facility_name: "T. Nagar Girls Higher Secondary School",
-    facility_distance: 60.0,
-    high_traffic_area: true,
-    priority_score: 80,
-    priority_level: "CRITICAL",
-    status: "OPEN",
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  },
-  {
-    id: 3,
-    category: "Broken Streetlight",
-    department: "Electrical Department",
-    latitude: 12.9815,
-    longitude: 80.2180,
-    location: "Velachery Bypass Rd, Chennai",
-    report_count: 1,
-    nearby_facility: true,
-    facility_type: "SCHOOL",
-    facility_name: "Velachery DAV School",
-    facility_distance: 190.0,
-    high_traffic_area: true,
-    priority_score: 50,
-    priority_level: "MEDIUM",
-    status: "OPEN",
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  }
+// ============================================================
+// KNOWN FACILITIES — Schools & Hospitals in Chennai
+// Used by findNearbyFacility() to check the 500-metre radius.
+// In a real system this would come from a database table.
+// ============================================================
+const knownFacilities = [
+  { id: 1, name: 'Government General Hospital',          type: 'HOSPITAL', lat: 13.0827, lng: 80.2707 },
+  { id: 2, name: "Apollo Children's Hospital",           type: 'HOSPITAL', lat: 13.0604, lng: 80.2496 },
+  { id: 3, name: 'Madras Medical College',               type: 'SCHOOL',   lat: 13.0815, lng: 80.2720 },
+  { id: 4, name: 'T. Nagar Girls Higher Secondary School', type: 'SCHOOL', lat: 13.0415, lng: 80.2335 },
+  { id: 5, name: 'Velachery DAV School',                 type: 'SCHOOL',   lat: 12.9800, lng: 80.2170 }
 ];
 
-// Helper to map DB row object to frontend JSON structure
+// ============================================================
+// HELPER — Format a database row into the shape the
+//          frontend JavaScript expects.
+// ============================================================
 function formatReportRow(row) {
   return {
-    id: row.id,
-    category: row.category,
-    department: row.department,
-    description: row.description,
-    location: row.location,
-    lat: row.lat,
-    lng: row.lng,
-    status: row.status,
-    severity: row.severity,
-    duplicatesCount: row.duplicates_count || 1,
-    imageUrl: row.image_url,
-    timestamp: row.timestamp ? new Date(row.timestamp).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'Recently',
-    reporterPhone: row.reporter_phone,
-    issue_id: row.issue_id
+    id:               row.id,
+    category:         row.category,
+    department:       row.department,
+    description:      row.description,
+    location:         row.location,
+    lat:              row.lat,
+    lng:              row.lng,
+    status:           row.status,
+    severity:         row.severity,
+    duplicatesCount:  row.duplicates_count || 1,
+    imageUrl:         row.image_url,
+    timestamp:        row.timestamp
+                        ? new Date(row.timestamp).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+                        : 'Recently',
+    reporterPhone:    row.reporter_phone,
+    // Priority fields — returned to the frontend for display
+    priority_score:     row.priority_score    || 0,
+    priority_level:     row.priority_level    || 'LOW',
+    nearby_facility:    row.nearby_facility   || false,
+    facility_type:      row.facility_type     || null,
+    facility_name:      row.facility_name     || null,
+    facility_distance:  row.facility_distance || null,
+    high_traffic_area:  row.high_traffic_area || false
   };
 }
 
-// --- Low-Level Priority & Duplicate Detection System ---
+// ============================================================
+// IMAGE UPLOAD — Supabase Storage
+// Vercel's filesystem is read-only, so we upload images to
+// Supabase Storage and return a permanent public URL.
+// ============================================================
+async function uploadImageToSupabase(buffer, originalname) {
+  if (!supabase) {
+    // No Supabase configured — return a placeholder image
+    return 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=500&q=80';
+  }
 
-// Hardcoded known public facilities (Schools & Hospitals) in Chennai for proximity check
-const sampleFacilities = [
-  { id: 1, name: "Government General Hospital", type: "HOSPITAL", lat: 13.0827, lng: 80.2707 },
-  { id: 2, name: "Apollo Children's Hospital", type: "HOSPITAL", lat: 13.0604, lng: 80.2496 },
-  { id: 3, name: "Madras Medical College", type: "SCHOOL", lat: 13.0815, lng: 80.2720 },
-  { id: 4, name: "T. Nagar Girls Higher Secondary School", type: "SCHOOL", lat: 13.0415, lng: 80.2335 },
-  { id: 5, name: "Velachery DAV School", type: "SCHOOL", lat: 12.9800, lng: 80.2170 }
-];
+  const ext      = path.extname(originalname) || '.jpg';
+  const filename = `report-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
 
-/**
- * Calculates geodetic distance in meters between two lat/lng coordinates using the Haversine formula.
- * The Haversine formula determines the great-circle distance between two points on a sphere given their longitudes and latitudes.
- * @param {number} lat1 - Latitude of first point
- * @param {number} lon1 - Longitude of first point
- * @param {number} lat2 - Latitude of second point
- * @param {number} lon2 - Longitude of second point
- * @returns {number} Distance in meters
- */
-function calculateDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371e3; // Earth's radius in meters
-  
-  // Convert degrees to radians
-  const radLat1 = lat1 * Math.PI / 180;
-  const radLat2 = lat2 * Math.PI / 180;
-  const deltaLat = (lat2 - lat1) * Math.PI / 180;
-  const deltaLon = (lon2 - lon1) * Math.PI / 180;
+  const { error } = await supabase.storage
+    .from('report-images')
+    .upload(filename, buffer, { contentType: 'image/jpeg', upsert: false });
 
-  // Apply Haversine formula
-  const a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
-            Math.cos(radLat1) * Math.cos(radLat2) *
-            Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  if (error) {
+    console.error('Supabase Storage upload error:', error.message);
+    return 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=500&q=80';
+  }
 
-  return R * c; // Returns the distance in meters
+  const { data: publicData } = supabase.storage
+    .from('report-images')
+    .getPublicUrl(filename);
+
+  return publicData.publicUrl;
 }
 
-/**
- * Calculates the score component based on the total report count.
- * Weight breakdown: 1 report (20 pts), 2 (40 pts), 3 (60 pts), 4 (75 pts), 5 (90 pts), 6+ (100 pts)
- * @param {number} reportCount - Number of reports in the cluster
- * @returns {number} Score from 0 to 100
- */
+// ============================================================
+// STEP 3 — HAVERSINE DISTANCE FORMULA
+// ============================================================
+// The earth is a sphere, so we cannot measure distance between
+// two GPS points using simple flat (Euclidean) geometry.
+// The Haversine formula calculates the shortest path along
+// the curved surface of the earth between two lat/lng points.
+//
+// Parameters:
+//   lat1, lon1 — latitude and longitude of point A (degrees)
+//   lat2, lon2 — latitude and longitude of point B (degrees)
+//
+// Returns:
+//   distance in metres
+// ============================================================
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371e3; // Earth's mean radius in metres (6,371 km)
+
+  // Step 1 — Convert both latitudes from degrees to radians.
+  // Trigonometry functions (Math.sin, Math.cos) need radians.
+  const radLat1 = (lat1 * Math.PI) / 180;
+  const radLat2 = (lat2 * Math.PI) / 180;
+
+  // Step 2 — Calculate the difference in latitude and longitude.
+  const deltaLat = ((lat2 - lat1) * Math.PI) / 180;
+  const deltaLon = ((lon2 - lon1) * Math.PI) / 180;
+
+  // Step 3 — Apply the Haversine formula.
+  // 'a' represents the square of half the chord length between the two points.
+  const a =
+    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+    Math.cos(radLat1) * Math.cos(radLat2) *
+    Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
+
+  // Step 4 — 'c' is the angular distance in radians.
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  // Step 5 — Multiply by Earth's radius to get metres.
+  return R * c;
+}
+
+// ============================================================
+// STEP 4 — FIND DUPLICATE REPORTS
+// ============================================================
+// After a new report is saved, we look through existing open
+// reports of the SAME CATEGORY and check whether any of them
+// are within 100 metres of the new report.
+//
+// Why 100 metres?
+//   GPS accuracy is typically 5–15 metres outdoors.
+//   Citizens reporting the same pothole may stand on opposite
+//   sides of the street, adding 10–30 m variation.
+//   100 m comfortably covers these real-world variations while
+//   avoiding accidentally merging two different nearby issues.
+//
+// Parameters:
+//   newReport       — the report just inserted
+//   existingReports — array of open reports of the same category
+//
+// Returns:
+//   array of reports that are duplicates of newReport
+// ============================================================
+function findDuplicateReports(newReport, existingReports) {
+  const DUPLICATE_RADIUS_METRES = 100;
+  const duplicates = [];
+
+  for (const report of existingReports) {
+    // Skip the new report itself (it was already fetched with the others)
+    if (report.id === newReport.id) continue;
+
+    // Skip resolved reports — they are old, fixed issues.
+    // A new complaint about the same spot is a fresh problem.
+    if (report.status === 'Resolved' || report.status === 'RESOLVED') continue;
+
+    // Category must match.
+    // A pothole and a garbage pile near each other are NOT duplicates.
+    if (report.category !== newReport.category) continue;
+
+    // Calculate geodetic distance between the two GPS positions.
+    const distanceMetres = calculateDistance(
+      newReport.lat, newReport.lng,
+      report.lat,    report.lng
+    );
+
+    // If within 100 metres — it is a duplicate of the same issue.
+    if (distanceMetres <= DUPLICATE_RADIUS_METRES) {
+      duplicates.push(report);
+    }
+  }
+
+  return duplicates;
+}
+
+// ============================================================
+// STEP 6 — REPORT SCORE
+// ============================================================
+// More citizens reporting the same issue means it is more
+// urgent and affects more people. We reward higher counts
+// with a non-linear (stepped) score so the jump from 1 → 2
+// is significant, and the top end is capped at 100.
+//
+// Weight: 50% of the final priority score.
+// ============================================================
 function calculateReportScore(reportCount) {
   if (reportCount <= 1) return 20;
   if (reportCount === 2) return 40;
   if (reportCount === 3) return 60;
   if (reportCount === 4) return 75;
   if (reportCount === 5) return 90;
-  return 100;
+  return 100; // 6 or more reports
 }
 
-/**
- * Searches for a duplicate issue cluster of the same category within a 100-meter radius.
- * @param {string} category - Category of the issue
- * @param {number} lat - Latitude of the new report
- * @param {number} lng - Longitude of the new report
- * @param {Array} existingIssues - Array of existing issue clusters
- * @returns {Object|null} The matching issue cluster, or null if none found
- */
-function findDuplicateIssue(category, lat, lng, existingIssues) {
-  for (const issue of existingIssues) {
-    if (issue.status === 'RESOLVED' || issue.status === 'Resolved') continue;
-    if (issue.category === category) {
-      const dist = calculateDistance(lat, lng, issue.latitude, issue.longitude);
-      if (dist <= 100) {
-        return issue;
-      }
-    }
-  }
-  return null;
-}
+// ============================================================
+// STEP 7 — NEARBY SCHOOL / HOSPITAL DETECTION
+// ============================================================
+// Issues near schools or hospitals are more dangerous because
+// they affect vulnerable people (children, patients, visitors).
+// We search within a 500-metre radius.
+//
+// Why 500 metres?
+//   It is roughly a 6-minute walk. A large pothole or flooded
+//   road 500 m from a hospital can genuinely delay ambulances.
+//
+// Parameters:
+//   lat, lng — GPS position of the new report
+//
+// Returns:
+//   { found: true,  type, name, distance }  — if a facility is nearby
+//   { found: false, type: null, name: null, distance: null }
+// ============================================================
+function findNearbyFacility(lat, lng) {
+  const FACILITY_RADIUS_METRES = 500;
+  let closestFacility  = null;
+  let closestDistance  = FACILITY_RADIUS_METRES; // start at the maximum allowed distance
 
-/**
- * Checks for any nearby public facilities (schools or hospitals) within a 500-meter radius.
- * @param {number} lat - Latitude of the issue
- * @param {number} lng - Longitude of the issue
- * @param {Array} facilitiesList - List of known facilities
- * @returns {Object|null} Closest facility information, or null if none found
- */
-function findNearbyFacility(lat, lng, facilitiesList) {
-  let closestFacility = null;
-  let minDistance = 500; // Search radius limit (500 meters)
-
-  for (const facility of facilitiesList) {
+  for (const facility of knownFacilities) {
     const dist = calculateDistance(lat, lng, facility.lat, facility.lng);
-    if (dist <= 500 && dist < minDistance) {
-      minDistance = dist;
-      closestFacility = {
-        name: facility.name,
-        type: facility.type,
-        distance: dist
-      };
+
+    // Keep only the nearest facility within the 500 m limit
+    if (dist <= FACILITY_RADIUS_METRES && dist < closestDistance) {
+      closestDistance  = dist;
+      closestFacility  = facility;
     }
   }
-  return closestFacility;
+
+  if (closestFacility) {
+    return {
+      found:    true,
+      type:     closestFacility.type,
+      name:     closestFacility.name,
+      distance: Math.round(closestDistance) // rounded to nearest metre
+    };
+  }
+
+  return { found: false, type: null, name: null, distance: null };
 }
 
-/**
- * Classifies whether a location is a high-traffic area based on road type keywords in address.
- * @param {string} location - Location address text
- * @returns {boolean} True if high traffic area, false otherwise
- */
-function isHighTrafficRoad(location) {
+// ============================================================
+// STEP 8 — HIGH-TRAFFIC AREA CLASSIFICATION
+// ============================================================
+// IMPORTANT: This is road-TYPE classification, NOT real-time
+// traffic data. We do not have a live traffic API.
+//
+// Instead, we look at the location/address string and check
+// whether it contains keywords that indicate a major road.
+//
+// Keywords that mean "high-traffic / main road":
+//   salai, bypass, highway, main rd, main road,
+//   expressway, arterial
+//
+// Why this approach?
+//   It is simple, requires no external API, and is accurate
+//   enough for a prototype. Most Chennai main roads contain
+//   the word "salai" (Tamil for "road/avenue") in their name.
+//
+// Weight: 20% of the final priority score.
+//
+// Parameters:
+//   location — address string from the report
+//
+// Returns:
+//   true  — high traffic (major road)
+//   false — normal traffic (local or residential road)
+// ============================================================
+function isHighTrafficArea(location) {
   const locLower = (location || '').toLowerCase();
-  const highTrafficKeywords = ['salai', 'bypass', 'highway', 'main rd', 'main road', 'expressway', 'arterial'];
+  const highTrafficKeywords = [
+    'salai', 'bypass', 'highway', 'main rd', 'main road', 'expressway', 'arterial'
+  ];
   return highTrafficKeywords.some(keyword => locLower.includes(keyword));
 }
 
-/**
- * Calculates traffic score component. High traffic road yields 100, local road yields 0.
- * @param {string} location - Location address text
- * @returns {number} Score (0 or 100)
- */
-function calculateTrafficScore(location) {
-  return isHighTrafficRoad(location) ? 100 : 0;
-}
-
-/**
- * Computes a weighted priority score between 0 and 100.
- * Weights: Report Count (50%), Proximity Facility (30%), High Traffic Road (20%)
- * @param {number} reportScore - Score component for reports (0-100)
- * @param {number} facilityScore - Score component for facilities (0-100)
- * @param {number} trafficScore - Score component for traffic (0-100)
- * @returns {number} Final priority score rounded to nearest integer (0-100)
- */
+// ============================================================
+// STEP 9 — PRIORITY SCORE FORMULA
+// ============================================================
+// Combines three weighted factors into one final score (0–100).
+//
+//   priorityScore = (reportScore × 0.50)
+//                + (facilityScore × 0.30)
+//                + (trafficScore  × 0.20)
+//
+// Parameters:
+//   reportScore   — 0–100, based on how many citizens reported
+//   facilityScore — 100 if school/hospital nearby, else 0
+//   trafficScore  — 100 if high-traffic road, else 0
+//
+// Returns:
+//   integer 0–100
+// ============================================================
 function calculatePriority(reportScore, facilityScore, trafficScore) {
   const score = (reportScore * 0.50) + (facilityScore * 0.30) + (trafficScore * 0.20);
   return Math.round(score);
 }
 
-/**
- * Maps a numeric priority score to a user-friendly priority level.
- * @param {number} score - Numeric priority score (0-100)
- * @returns {string} Level category (LOW, MEDIUM, HIGH, CRITICAL)
- */
+// ============================================================
+// STEP 10 — PRIORITY LEVEL
+// ============================================================
+// Maps the numeric score to a human-readable priority label.
+// ============================================================
 function getPriorityLevel(score) {
-  if (score >= 80) return "CRITICAL";
-  if (score >= 60) return "HIGH";
-  if (score >= 40) return "MEDIUM";
-  return "LOW";
+  if (score >= 80) return 'CRITICAL';
+  if (score >= 60) return 'HIGH';
+  if (score >= 40) return 'MEDIUM';
+  return 'LOW';
 }
 
-/**
- * Maps a numeric priority score to a severity scale from 2 to 5 for UI badges.
- * @param {number} score - Numeric priority score (0-100)
- * @returns {number} Severity rating (2 to 5)
- */
-function mapPriorityToSeverity(score) {
-  if (score >= 80) return 5;
-  if (score >= 60) return 4;
-  if (score >= 40) return 3;
-  return 2;
+// ============================================================
+// STEP 11 — SEVERITY (for colour-coded badges in the UI)
+// ============================================================
+// The frontend uses a severity number (1–5) to choose badge
+// colours (green → yellow → orange → red).
+// We derive severity from the priority level — no random numbers.
+//
+//   LOW      → 2  (lime green)
+//   MEDIUM   → 3  (amber)
+//   HIGH     → 4  (orange)
+//   CRITICAL → 5  (red)
+// ============================================================
+function mapPriorityToSeverity(priorityLevel) {
+  if (priorityLevel === 'CRITICAL') return 5;
+  if (priorityLevel === 'HIGH')     return 4;
+  if (priorityLevel === 'MEDIUM')   return 3;
+  return 2; // LOW
 }
 
-// --- REST API ENDPOINTS ---
+// ============================================================
+// CATEGORY / DEPARTMENT CLASSIFIER
+// ============================================================
+// Classifies the report category and responsible department
+// based on keywords in the description.
+// (In a real system this could use an AI image classifier.)
+// ============================================================
+function classifyReport(description) {
+  const d = (description || '').toLowerCase();
+  if (d.includes('garbage') || d.includes('waste') || d.includes('trash')) {
+    return { category: 'Garbage Overflow', department: 'Solid Waste Management' };
+  }
+  if (d.includes('light') || d.includes('lamp') || d.includes('streetlight')) {
+    return { category: 'Broken Streetlight', department: 'Electrical Department' };
+  }
+  if (d.includes('water') || d.includes('drain') || d.includes('sewage') || d.includes('leak')) {
+    return { category: 'Water & Sewage Issue', department: 'Water & Sewerage' };
+  }
+  // Default — most common civic issue
+  return { category: 'Pothole & Surface Damage', department: 'Highways & Roads' };
+}
 
-// GET /api/reports - Fetch reports from Supabase DB or Fallback Memory
+// ============================================================
+// REST API ENDPOINTS
+// ============================================================
+
+// ── GET /api/reports ─────────────────────────────────────────
+// Returns all reports, optionally filtered by department.
+// Used by the frontend to populate both the citizen view and
+// the admin queue.
+// ─────────────────────────────────────────────────────────────
 app.get('/api/reports', async (req, res) => {
   const { department } = req.query;
 
   if (supabase) {
     try {
-      let query = supabase.from('civic_reports').select('*').order('timestamp', { ascending: false });
+      let query = supabase
+        .from('civic_reports')
+        .select('*')
+        .order('timestamp', { ascending: false });
+
       if (department && department !== 'All') {
         query = query.eq('department', department);
       }
+
       const { data, error } = await query;
       if (error) throw error;
-      const formatted = (data || []).map(formatReportRow);
-      return res.json(formatted);
+      return res.json((data || []).map(formatReportRow));
     } catch (err) {
-      console.error('Supabase fetch error, falling back to memory:', err.message);
+      console.error('GET /api/reports Supabase error, using fallback:', err.message);
     }
   }
 
-  // Fallback memory filtering
+  // In-memory fallback
+  let results = fallbackReports;
   if (department && department !== 'All') {
-    const filtered = fallbackReports.filter(r => r.department === department);
-    return res.json(filtered);
+    results = fallbackReports.filter(r => r.department === department);
   }
-  res.json(fallbackReports);
+  res.json(results);
 });
 
-// POST /api/reports - Create new report in Supabase DB or Fallback Memory
+// ── GET /api/reports/prioritized ─────────────────────────────
+// Returns all open reports sorted by priority_score descending.
+// NOTE: This route must be registered BEFORE /api/reports/:id
+//       so Express does not mistake "prioritized" for an :id.
+// ─────────────────────────────────────────────────────────────
+app.get('/api/reports/prioritized', async (req, res) => {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('civic_reports')
+        .select('*')
+        .neq('status', 'Resolved')
+        .neq('status', 'RESOLVED')
+        .order('priority_score', { ascending: false });
+
+      if (error) throw error;
+      return res.json({ success: true, reports: (data || []).map(formatReportRow) });
+    } catch (err) {
+      console.error('GET /api/reports/prioritized error, using fallback:', err.message);
+    }
+  }
+
+  const active = fallbackReports
+    .filter(r => r.status !== 'Resolved' && r.status !== 'RESOLVED')
+    .sort((a, b) => (b.priority_score || 0) - (a.priority_score || 0));
+
+  res.json({ success: true, reports: active });
+});
+
+// ── POST /api/reports — COMPLETE TRIAGE PIPELINE ─────────────
+//
+// This is the most important route. It follows all 20 steps:
+//
+//  1.  Receive the form data (description, location, lat, lng, image)
+//  2.  Upload image to Supabase Storage
+//  3.  Classify category and department from description keywords
+//  4.  Build the initial report object with safe default values
+//  5.  INSERT the report into civic_reports FIRST
+//      (the citizen's report is always saved before anything else)
+//  6.  Fetch existing open reports of the same category
+//  7.  Call findDuplicateReports() → identify duplicates within 100 m
+//  8.  Calculate duplicateCount = duplicates.length + 1 (new report included)
+//  9.  Call findNearbyFacility() → check within 500 m
+// 10.  Call isHighTrafficArea() → keyword-based road classification
+// 11.  Call calculateReportScore() with duplicateCount
+// 12.  Calculate facilityScore (100 / 0)
+// 13.  Calculate trafficScore  (100 / 0)
+// 14.  Call calculatePriority() → weighted average
+// 15.  Call getPriorityLevel() → CRITICAL / HIGH / MEDIUM / LOW
+// 16.  Call mapPriorityToSeverity() → 2 / 3 / 4 / 5
+// 17.  UPDATE the new report in the DB with all calculated fields
+// 18.  UPDATE all duplicate reports with the new duplicates_count,
+//       priority_score, priority_level, and severity
+// 19.  Return enriched response to the frontend
+//
+// If any step 6–18 fails, the report is already saved (step 5),
+// so the citizen's submission is never lost.
+// ─────────────────────────────────────────────────────────────
 app.post('/api/reports', upload.single('image'), async (req, res) => {
   const { description, location, lat, lng, reporterPhone } = req.body;
 
-  let imageUrl = "https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=500&q=80";
+  // ── 1. Upload image ──────────────────────────────────────
+  let imageUrl = 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=500&q=80';
   if (req.file) {
-    // Upload to Supabase Storage (works on Vercel; local disk is ephemeral)
     imageUrl = await uploadImageToSupabase(req.file.buffer, req.file.originalname);
   } else if (req.body.imageUrl) {
     imageUrl = req.body.imageUrl;
   }
 
-  // Multimodal AI Classification Mock Logic
-  const descLower = (description || '').toLowerCase();
-  const isGarbage = descLower.includes('garbage') || descLower.includes('waste');
-  const isLight = descLower.includes('light') || descLower.includes('lamp');
-  
-  let dept = "Highways & Roads";
-  let category = "Pothole & Surface Damage";
-  if (isGarbage) { dept = "Solid Waste Management"; category = "Garbage Overflow"; }
-  if (isLight) { dept = "Electrical Department"; category = "Broken Streetlight"; }
+  // ── 2. Classify category & department ───────────────────
+  const { category, department } = classifyReport(description);
 
-  const newReportLat = parseFloat(lat) || 13.0827;
-  const newReportLng = parseFloat(lng) || 80.2707;
-  const reportLocation = location || 'Anna Salai, Chennai (GPS Locked)';
+  const newLat      = parseFloat(lat) || 13.0827;
+  const newLng      = parseFloat(lng) || 80.2707;
+  const reportLoc   = location || 'Anna Salai, Chennai (GPS Locked)';
+  const reportId    = `REP-${Math.floor(1000 + Math.random() * 9000)}`;
 
-  // --- Duplicate Detection and Priority Calculation Logic ---
-  let duplicateIssue = null;
-  let issueId = null;
-  let finalReportCount = 1;
-  let priorityScore = 20; // default Low
-  let priorityLevel = "LOW";
+  // ── 3. Build the initial report object ──────────────────
+  // These are safe defaults. All priority fields will be
+  // recalculated and updated after the report is saved.
+  const initialReport = {
+    id:               reportId,
+    category,
+    department,
+    description:      description || '',
+    location:         reportLoc,
+    lat:              newLat,
+    lng:              newLng,
+    status:           'Pending',
+    severity:         2,        // default LOW, will be updated
+    duplicates_count: 1,        // default, will be updated
+    image_url:        imageUrl,
+    reporter_phone:   reporterPhone || '+91 9876543210',
+    priority_score:   0,
+    priority_level:   'LOW',
+    nearby_facility:  false,
+    facility_type:    null,
+    facility_name:    null,
+    facility_distance: null,
+    high_traffic_area: false
+  };
 
-  // Fetch active issues
-  let activeIssues = [];
+  // ── 4. SAVE THE REPORT FIRST ─────────────────────────────
+  // This must happen before any calculation. If duplicate
+  // detection or priority scoring fails later, the citizen's
+  // report is already safely stored.
   if (supabase) {
     try {
-      const { data, error } = await supabase
-        .from('issues')
-        .select('*')
-        .neq('status', 'RESOLVED')
-        .neq('status', 'Resolved');
-      if (!error && data) {
-        activeIssues = data;
-      }
+      const { error } = await supabase
+        .from('civic_reports')
+        .insert([initialReport]);
+      if (error) throw error;
     } catch (err) {
-      console.error('Error fetching existing issues from Supabase:', err.message);
+      console.error('Failed to save report to Supabase:', err.message);
+      return res.status(500).json({ success: false, message: 'Could not save report. Please try again.' });
     }
   } else {
-    activeIssues = fallbackIssues;
+    // In-memory fallback
+    fallbackReports.unshift(formatReportRow(initialReport));
   }
 
-  // Find duplicate
-  duplicateIssue = findDuplicateIssue(category, newReportLat, newReportLng, activeIssues);
+  // ── 5–16. TRIAGE PIPELINE ────────────────────────────────
+  // All of this runs AFTER the report is safely saved.
+  // Any error here is caught and logged; the report already exists.
 
-  if (duplicateIssue) {
-    // Increment report count
-    finalReportCount = duplicateIssue.report_count + 1;
-    
-    // Calculate new priority score
-    const reportScore = calculateReportScore(finalReportCount);
-    const facilityScore = duplicateIssue.nearby_facility ? 100 : 0;
-    const trafficScore = duplicateIssue.high_traffic_area ? 100 : 0;
-    priorityScore = calculatePriority(reportScore, facilityScore, trafficScore);
-    priorityLevel = getPriorityLevel(priorityScore);
-    issueId = duplicateIssue.id;
+  let duplicateCount = 1;
+  let facilityResult = { found: false, type: null, name: null, distance: null };
+  let isTraffic      = false;
+  let priorityScore  = 0;
+  let priorityLevel  = 'LOW';
+  let severity       = 2;
 
-    const newSeverity = mapPriorityToSeverity(priorityScore);
-
-    // Update existing issue in DB / fallback memory
+  try {
+    // ── 5. Fetch existing open reports of the same category ──
+    let existingReports = [];
     if (supabase) {
-      try {
-        await supabase
-          .from('issues')
-          .update({
-            report_count: finalReportCount,
-            priority_score: priorityScore,
-            priority_level: priorityLevel,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', duplicateIssue.id);
+      const { data, error } = await supabase
+        .from('civic_reports')
+        .select('*')
+        .eq('category', category)
+        .neq('status', 'Resolved')
+        .neq('status', 'RESOLVED');
 
-        await supabase
-          .from('civic_reports')
-          .update({
-            severity: newSeverity,
-            duplicates_count: finalReportCount
-          })
-          .eq('issue_id', duplicateIssue.id);
-      } catch (err) {
-        console.error('Error updating existing issue in Supabase:', err.message);
-      }
+      if (!error) existingReports = data || [];
     } else {
-      const issue = fallbackIssues.find(i => i.id === duplicateIssue.id);
-      if (issue) {
-        issue.report_count = finalReportCount;
-        issue.priority_score = priorityScore;
-        issue.priority_level = priorityLevel;
-        issue.updated_at = new Date().toISOString();
-      }
-      fallbackReports.forEach(r => {
-        if (r.issue_id === duplicateIssue.id) {
-          r.severity = newSeverity;
-          r.duplicatesCount = finalReportCount;
-        }
-      });
+      existingReports = fallbackReports.filter(
+        r => r.category === category && r.status !== 'Resolved' && r.status !== 'RESOLVED'
+      );
     }
-  } else {
-    // Create new issue cluster
-    const nearbyFacility = findNearbyFacility(newReportLat, newReportLng, sampleFacilities);
-    const hasFacility = !!nearbyFacility;
-    const isTraffic = isHighTrafficRoad(reportLocation);
 
-    const reportScore = calculateReportScore(1);
-    const facilityScore = hasFacility ? 100 : 0;
-    const trafficScore = isTraffic ? 100 : 0;
+    // ── 6. Find duplicates within 100 metres ────────────────
+    const duplicateReports = findDuplicateReports(
+      { id: reportId, category, lat: newLat, lng: newLng },
+      existingReports
+    );
+
+    // ── 7. Calculate total count ─────────────────────────────
+    // duplicateReports contains the OTHER matching reports.
+    // We add 1 for the new report itself.
+    //
+    // Example: 3 existing duplicates + this new report = 4 total
+    duplicateCount = duplicateReports.length + 1;
+
+    // ── 8. Nearby school or hospital? ───────────────────────
+    facilityResult = findNearbyFacility(newLat, newLng);
+
+    // ── 9. High-traffic road? ────────────────────────────────
+    isTraffic = isHighTrafficArea(reportLoc);
+
+    // ── 10–13. Calculate scores ──────────────────────────────
+    const reportScore   = calculateReportScore(duplicateCount);
+    const facilityScore = facilityResult.found ? 100 : 0;
+    const trafficScore  = isTraffic ? 100 : 0;
 
     priorityScore = calculatePriority(reportScore, facilityScore, trafficScore);
     priorityLevel = getPriorityLevel(priorityScore);
+    severity      = mapPriorityToSeverity(priorityLevel);
 
-    const newIssueData = {
-      category: category,
-      department: dept,
-      latitude: newReportLat,
-      longitude: newReportLng,
-      location: reportLocation,
-      report_count: 1,
-      nearby_facility: hasFacility,
-      facility_type: nearbyFacility ? nearbyFacility.type : null,
-      facility_name: nearbyFacility ? nearbyFacility.name : null,
-      facility_distance: nearbyFacility ? parseFloat(nearbyFacility.distance.toFixed(1)) : null,
-      high_traffic_area: isTraffic,
-      priority_score: priorityScore,
-      priority_level: priorityLevel,
-      status: 'OPEN'
+    // ── 14. Update the new report with all calculated fields ─
+    const updatePayload = {
+      duplicates_count:  duplicateCount,
+      priority_score:    priorityScore,
+      priority_level:    priorityLevel,
+      severity,
+      nearby_facility:   facilityResult.found,
+      facility_type:     facilityResult.type,
+      facility_name:     facilityResult.name,
+      facility_distance: facilityResult.distance,
+      high_traffic_area: isTraffic
     };
 
     if (supabase) {
-      try {
-        const { data, error } = await supabase
-          .from('issues')
-          .insert([newIssueData])
-          .select();
-        if (error) throw error;
-        if (data && data.length > 0) {
-          issueId = data[0].id;
-        }
-      } catch (err) {
-        console.error('Error creating new issue in Supabase:', err.message);
+      await supabase
+        .from('civic_reports')
+        .update(updatePayload)
+        .eq('id', reportId);
+
+      // ── 15. Update ALL duplicate reports ──────────────────
+      // Every matching report now shows the same cluster count
+      // and the recalculated priority.
+      //
+      // Example result (5 matching reports):
+      //   REP-001 → duplicates_count = 5, severity = 5 (CRITICAL)
+      //   REP-002 → duplicates_count = 5, severity = 5 (CRITICAL)
+      //   REP-003 → duplicates_count = 5, severity = 5 (CRITICAL)
+      //   REP-004 → duplicates_count = 5, severity = 5 (CRITICAL)
+      //   REP-005 → duplicates_count = 5, severity = 5 (CRITICAL)
+      for (const dup of duplicateReports) {
+        await supabase
+          .from('civic_reports')
+          .update({
+            duplicates_count: duplicateCount,
+            priority_score:   priorityScore,
+            priority_level:   priorityLevel,
+            severity
+          })
+          .eq('id', dup.id);
       }
     } else {
-      const newId = fallbackIssues.length > 0 ? Math.max(...fallbackIssues.map(i => i.id)) + 1 : 1;
-      const localIssue = {
-        id: newId,
-        ...newIssueData,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      fallbackIssues.push(localIssue);
-      issueId = newId;
+      // In-memory fallback update
+      for (const r of fallbackReports) {
+        const isNew = r.id === reportId;
+        const isDup = duplicateReports.some(d => d.id === r.id);
+
+        if (isNew || isDup) {
+          r.duplicatesCount  = duplicateCount;
+          r.severity         = severity;
+          r.priority_score   = priorityScore;
+          r.priority_level   = priorityLevel;
+        }
+        if (isNew) {
+          r.nearby_facility   = facilityResult.found;
+          r.facility_type     = facilityResult.type;
+          r.facility_name     = facilityResult.name;
+          r.facility_distance = facilityResult.distance;
+          r.high_traffic_area = isTraffic;
+        }
+      }
     }
+  } catch (err) {
+    // The citizen's report is already saved — do not reject the request.
+    // Log the error and continue with default priority values.
+    console.error('Triage pipeline error (report already saved):', err.message);
   }
 
-  // Create new report data payload
-  const newReportData = {
-    id: `REP-${Math.floor(1000 + Math.random() * 9000)}`,
-    category: category,
-    department: dept,
-    description: description || '',
-    location: reportLocation,
-    lat: newReportLat,
-    lng: newReportLng,
-    status: "Pending",
-    severity: mapPriorityToSeverity(priorityScore),
-    duplicates_count: finalReportCount,
-    image_url: imageUrl,
-    reporter_phone: reporterPhone || "+91 9876543210",
-    issue_id: issueId
-  };
-
-  if (supabase) {
-    try {
-      const { data, error } = await supabase
-        .from('civic_reports')
-        .insert([newReportData])
-        .select();
-
-      if (error) throw error;
-      const createdReport = formatReportRow(data[0]);
-      
-      const responseReport = {
-        ...createdReport,
-        is_duplicate: !!duplicateIssue,
-        report_count: finalReportCount,
-        priority_score: priorityScore,
-        priority_level: priorityLevel
-      };
-      return res.status(201).json({ success: true, report: responseReport });
-    } catch (err) {
-      console.error('Supabase insert error, saving to memory fallback:', err.message);
+  // ── 16. Return enriched response to the frontend ─────────
+  return res.status(201).json({
+    success: true,
+    report: {
+      ...formatReportRow(initialReport),
+      duplicatesCount:   duplicateCount,
+      priority_score:    priorityScore,
+      priority_level:    priorityLevel,
+      nearby_facility:   facilityResult.found,
+      facility_type:     facilityResult.type,
+      facility_name:     facilityResult.name,
+      facility_distance: facilityResult.distance,
+      high_traffic_area: isTraffic,
+      severity
     }
-  }
-
-  // Fallback memory insert
-  const formattedReport = formatReportRow(newReportData);
-  fallbackReports.unshift(formattedReport);
-
-  const responseReport = {
-    ...formattedReport,
-    is_duplicate: !!duplicateIssue,
-    report_count: finalReportCount,
-    priority_score: priorityScore,
-    priority_level: priorityLevel
-  };
-  res.status(201).json({ success: true, report: responseReport });
+  });
 });
 
-// PATCH /api/reports/:id/status - Update report status in Supabase DB or Fallback Memory
+// ── PATCH /api/reports/:id/status ────────────────────────────
+// Updates the status of a single report (Pending → Assigned →
+// In Progress → Resolved). Used by the admin triage desk.
+// ─────────────────────────────────────────────────────────────
 app.patch('/api/reports/:id/status', async (req, res) => {
-  const { id } = req.params;
+  const { id }     = req.params;
   const { status } = req.body;
-
-  let reportToUpdate = null;
 
   if (supabase) {
     try {
       const { data, error } = await supabase
         .from('civic_reports')
-        .update({ status: status })
+        .update({ status })
         .eq('id', id)
         .select();
 
       if (error) throw error;
       if (data && data.length > 0) {
-        reportToUpdate = data[0];
-        
-        // Sync with parent issue if resolving
-        if ((status === 'Resolved' || status === 'RESOLVED') && reportToUpdate.issue_id) {
-          await supabase
-            .from('issues')
-            .update({ status: 'RESOLVED' })
-            .eq('id', reportToUpdate.issue_id);
-        }
-        
-        return res.json({ success: true, report: formatReportRow(reportToUpdate) });
+        return res.json({ success: true, report: formatReportRow(data[0]) });
       }
     } catch (err) {
-      console.error('Supabase update error, trying memory fallback:', err.message);
+      console.error('PATCH /api/reports/:id/status error, using fallback:', err.message);
     }
   }
 
-  // Fallback memory update
+  // In-memory fallback
   const report = fallbackReports.find(r => r.id === id);
   if (!report) {
     return res.status(404).json({ success: false, message: 'Report not found' });
   }
-
   report.status = status;
-  if ((status === 'Resolved' || status === 'RESOLVED') && report.issue_id) {
-    const issue = fallbackIssues.find(i => i.id === report.issue_id);
-    if (issue) {
-      issue.status = 'RESOLVED';
-    }
-  }
   res.json({ success: true, report });
 });
 
-// GET /api/issues/prioritized - Get all active issues sorted by priority score
-app.get('/api/issues/prioritized', async (req, res) => {
-  if (supabase) {
-    try {
-      const { data, error } = await supabase
-        .from('issues')
-        .select('*')
-        .neq('status', 'RESOLVED')
-        .neq('status', 'Resolved')
-        .order('priority_score', { ascending: false });
-      if (error) throw error;
-      return res.json({ success: true, issues: data || [] });
-    } catch (err) {
-      console.error('Supabase prioritized issues fetch error, falling back to memory:', err.message);
-    }
-  }
-
-  // Fallback memory active issues
-  const activeIssues = fallbackIssues.filter(i => i.status !== 'RESOLVED' && i.status !== 'Resolved');
-  activeIssues.sort((a, b) => b.priority_score - a.priority_score);
-  res.json({ success: true, issues: activeIssues });
-});
-
-// GET /api/issues/:issueId - Fetch details of a single issue and all reports in its cluster
-app.get('/api/issues/:issueId', async (req, res) => {
-  const issueId = parseInt(req.params.issueId);
-
-  if (supabase) {
-    try {
-      const { data: issueData, error: issueError } = await supabase
-        .from('issues')
-        .select('*')
-        .eq('id', issueId)
-        .single();
-      if (issueError) throw issueError;
-
-      const { data: reportsData, error: reportsError } = await supabase
-        .from('civic_reports')
-        .select('*')
-        .eq('issue_id', issueId);
-      if (reportsError) throw reportsError;
-
-      return res.json({
-        success: true,
-        issue: issueData,
-        reports: (reportsData || []).map(formatReportRow)
-      });
-    } catch (err) {
-      console.error('Supabase issue details fetch error, falling back to memory:', err.message);
-    }
-  }
-
-  // Fallback memory issue details
-  const issue = fallbackIssues.find(i => i.id === issueId);
-  if (!issue) {
-    return res.status(404).json({ success: false, message: 'Issue not found' });
-  }
-
-  const reports = fallbackReports.filter(r => r.issue_id === issueId);
-  res.json({
-    success: true,
-    issue,
-    reports
-  });
-});
-
-// DELETE /api/reports/:id - Delete a report from Supabase DB or Fallback Memory
+// ── DELETE /api/reports/:id ───────────────────────────────────
+// Deletes a single report and recalculates the priority for
+// all remaining reports that were in the same duplicate cluster.
+// ─────────────────────────────────────────────────────────────
 app.delete('/api/reports/:id', async (req, res) => {
   const { id } = req.params;
 
-  let reportToDelete = null;
-
   if (supabase) {
     try {
-      // Find report first to get its issue_id
-      const { data: fetchReport, error: fetchErr } = await supabase
+      // Fetch the report before deleting so we know its category & location
+      const { data: toDelete, error: fetchErr } = await supabase
         .from('civic_reports')
         .select('*')
         .eq('id', id)
         .single();
 
-      if (!fetchErr && fetchReport) {
-        reportToDelete = fetchReport;
+      if (fetchErr || !toDelete) {
+        return res.status(404).json({ success: false, message: 'Report not found' });
+      }
 
-        // Delete report
-        const { error: deleteErr } = await supabase
+      // Delete the report
+      const { error: delErr } = await supabase
+        .from('civic_reports')
+        .delete()
+        .eq('id', id);
+
+      if (delErr) throw delErr;
+
+      // Recalculate priority for remaining reports in the same cluster
+      try {
+        const { data: remaining } = await supabase
           .from('civic_reports')
-          .delete()
-          .eq('id', id);
+          .select('*')
+          .eq('category', toDelete.category)
+          .neq('status', 'Resolved')
+          .neq('status', 'RESOLVED');
 
-        if (deleteErr) throw deleteErr;
+        if (remaining && remaining.length > 0) {
+          // Find which remaining reports are in the same 100-m cluster
+          const clusterMembers = remaining.filter(r => {
+            const dist = calculateDistance(toDelete.lat, toDelete.lng, r.lat, r.lng);
+            return dist <= 100;
+          });
 
-        // Update issue cluster
-        if (reportToDelete.issue_id) {
-          const { data: issue, error: issueFetchErr } = await supabase
-            .from('issues')
-            .select('*')
-            .eq('id', reportToDelete.issue_id)
-            .single();
+          if (clusterMembers.length > 0) {
+            // Pick representative location from first member
+            const rep = clusterMembers[0];
+            const newCount       = clusterMembers.length;
+            const reportScore    = calculateReportScore(newCount);
+            const facilityResult = findNearbyFacility(rep.lat, rep.lng);
+            const isTraffic      = isHighTrafficArea(rep.location);
+            const facilityScore  = facilityResult.found ? 100 : 0;
+            const trafficScore   = isTraffic ? 100 : 0;
+            const newScore       = calculatePriority(reportScore, facilityScore, trafficScore);
+            const newLevel       = getPriorityLevel(newScore);
+            const newSeverity    = mapPriorityToSeverity(newLevel);
 
-          if (!issueFetchErr && issue) {
-            const newCount = issue.report_count - 1;
-            if (newCount <= 0) {
-              // Delete issue if no reports left
-              await supabase.from('issues').delete().eq('id', issue.id);
-            } else {
-              // Recalculate priority
-              const reportScore = calculateReportScore(newCount);
-              const facilityScore = issue.nearby_facility ? 100 : 0;
-              const trafficScore = issue.high_traffic_area ? 100 : 0;
-              const priorityScore = calculatePriority(reportScore, facilityScore, trafficScore);
-              const priorityLevel = getPriorityLevel(priorityScore);
-              const newSeverity = mapPriorityToSeverity(priorityScore);
-
-              await supabase
-                .from('issues')
-                .update({
-                  report_count: newCount,
-                  priority_score: priorityScore,
-                  priority_level: priorityLevel,
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', issue.id);
-
-              // Cascade updated severity & duplicates count to remaining reports
+            for (const member of clusterMembers) {
               await supabase
                 .from('civic_reports')
                 .update({
-                  severity: newSeverity,
-                  duplicates_count: newCount
+                  duplicates_count: newCount,
+                  priority_score:   newScore,
+                  priority_level:   newLevel,
+                  severity:         newSeverity
                 })
-                .eq('issue_id', issue.id);
+                .eq('id', member.id);
             }
           }
         }
-        return res.json({ success: true, message: 'Report deleted successfully' });
+      } catch (recalcErr) {
+        // Non-fatal — the report is already deleted
+        console.error('Priority recalculation after delete failed:', recalcErr.message);
       }
+
+      return res.json({ success: true, message: 'Report deleted successfully' });
     } catch (err) {
-      console.error('Supabase delete error, trying memory fallback:', err.message);
+      console.error('DELETE /api/reports/:id error, using fallback:', err.message);
     }
   }
 
-  // Fallback memory delete
+  // In-memory fallback delete
   const index = fallbackReports.findIndex(r => r.id === id);
   if (index === -1) {
     return res.status(404).json({ success: false, message: 'Report not found' });
   }
 
-  reportToDelete = fallbackReports[index];
-  fallbackReports.splice(index, 1);
+  const deleted = fallbackReports.splice(index, 1)[0];
 
-  if (reportToDelete.issue_id) {
-    const issue = fallbackIssues.find(i => i.id === reportToDelete.issue_id);
-    if (issue) {
-      const newCount = issue.report_count - 1;
-      if (newCount <= 0) {
-        const issueIndex = fallbackIssues.findIndex(i => i.id === issue.id);
-        if (issueIndex !== -1) fallbackIssues.splice(issueIndex, 1);
-      } else {
-        issue.report_count = newCount;
-        const reportScore = calculateReportScore(newCount);
-        const facilityScore = issue.nearby_facility ? 100 : 0;
-        const trafficScore = issue.high_traffic_area ? 100 : 0;
-        issue.priority_score = calculatePriority(reportScore, facilityScore, trafficScore);
-        issue.priority_level = getPriorityLevel(issue.priority_score);
-        issue.updated_at = new Date().toISOString();
+  // Recalculate for remaining duplicates in memory
+  const remainingDups = fallbackReports.filter(r => {
+    if (r.category !== deleted.category) return false;
+    if (r.status === 'Resolved' || r.status === 'RESOLVED') return false;
+    const dist = calculateDistance(deleted.lat, deleted.lng, r.lat, r.lng);
+    return dist <= 100;
+  });
 
-        const newSeverity = mapPriorityToSeverity(issue.priority_score);
-        fallbackReports.forEach(r => {
-          if (r.issue_id === issue.id) {
-            r.severity = newSeverity;
-            r.duplicatesCount = newCount;
-          }
-        });
-      }
+  if (remainingDups.length > 0) {
+    const newCount      = remainingDups.length;
+    const reportScore   = calculateReportScore(newCount);
+    const fResult       = findNearbyFacility(remainingDups[0].lat, remainingDups[0].lng);
+    const tResult       = isHighTrafficArea(remainingDups[0].location);
+    const newScore      = calculatePriority(reportScore, fResult.found ? 100 : 0, tResult ? 100 : 0);
+    const newLevel      = getPriorityLevel(newScore);
+    const newSeverity   = mapPriorityToSeverity(newLevel);
+
+    for (const r of remainingDups) {
+      r.duplicatesCount  = newCount;
+      r.priority_score   = newScore;
+      r.priority_level   = newLevel;
+      r.severity         = newSeverity;
     }
   }
 
   res.json({ success: true, message: 'Report deleted successfully' });
 });
 
-// Serve main frontend
+// ── Serve frontend ────────────────────────────────────────────
 app.get('/{0,}', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Start Server
+// ── Start server ──────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`CivicResolve server running on http://localhost:${PORT}`);
 });

@@ -1,49 +1,114 @@
--- Create issues table in Supabase PostgreSQL
-CREATE TABLE IF NOT EXISTS issues (
-  id SERIAL PRIMARY KEY,
-  category TEXT NOT NULL,
-  department TEXT NOT NULL,
-  latitude DOUBLE PRECISION,
-  longitude DOUBLE PRECISION,
-  location TEXT,
-  report_count INT DEFAULT 1,
-  nearby_facility BOOLEAN DEFAULT FALSE,
-  facility_type TEXT,
-  facility_name TEXT,
-  facility_distance DOUBLE PRECISION,
-  high_traffic_area BOOLEAN DEFAULT FALSE,
-  priority_score INT DEFAULT 0,
-  priority_level TEXT DEFAULT 'LOW',
-  status TEXT DEFAULT 'OPEN',
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+-- ============================================================
+-- CivicResolve — Supabase PostgreSQL Schema
+-- ============================================================
+-- Run this entire file once in the Supabase SQL Editor.
+-- It is safe to run multiple times — IF NOT EXISTS prevents
+-- errors if the table or columns already exist.
+-- ============================================================
 
--- Create civic_reports table
+-- ── Table: civic_reports ─────────────────────────────────────
+-- All citizen issue reports are stored here.
+-- Priority fields are calculated by the backend triage pipeline
+-- and stored directly on each row (no separate issues table).
+-- ─────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS civic_reports (
-  id TEXT PRIMARY KEY,
-  category TEXT NOT NULL,
-  department TEXT NOT NULL,
-  description TEXT,
-  location TEXT,
-  lat DOUBLE PRECISION,
-  lng DOUBLE PRECISION,
-  status TEXT DEFAULT 'Pending',
-  severity INT DEFAULT 0,
+  id               TEXT PRIMARY KEY,
+  category         TEXT NOT NULL,
+  department       TEXT NOT NULL,
+  description      TEXT,
+  location         TEXT,
+  lat              DOUBLE PRECISION,
+  lng              DOUBLE PRECISION,
+  status           TEXT DEFAULT 'Pending',
+
+  -- Severity drives the colour badge in the frontend (1–5).
+  -- Derived from priority_level by the backend — never random.
+  severity         INT DEFAULT 2,
+
+  -- How many open reports exist for the same issue cluster.
+  -- All reports in a cluster share the same value.
   duplicates_count INT DEFAULT 1,
-  image_url TEXT,
-  timestamp TIMESTAMPTZ DEFAULT NOW(),
-  reporter_phone TEXT,
-  issue_id INT REFERENCES issues(id)
+
+  image_url        TEXT,
+  timestamp        TIMESTAMPTZ DEFAULT NOW(),
+  reporter_phone   TEXT,
+
+  -- ── Priority fields (calculated by triage pipeline) ──────
+  -- Final weighted score (0–100).
+  priority_score   INT DEFAULT 0,
+
+  -- CRITICAL / HIGH / MEDIUM / LOW
+  priority_level   TEXT DEFAULT 'LOW',
+
+  -- TRUE if a school or hospital is within 500 metres.
+  nearby_facility  BOOLEAN DEFAULT FALSE,
+
+  -- SCHOOL or HOSPITAL
+  facility_type    TEXT,
+
+  -- Human-readable facility name
+  facility_name    TEXT,
+
+  -- Distance to closest facility in metres (rounded integer)
+  facility_distance DOUBLE PRECISION,
+
+  -- TRUE if the location string contains a major-road keyword
+  -- (salai, bypass, highway, main road, expressway, arterial).
+  -- This is road-TYPE classification, NOT real-time traffic.
+  high_traffic_area BOOLEAN DEFAULT FALSE
 );
 
--- Enable Row Level Security (RLS) and grant read/write policies for anon access
-ALTER TABLE issues ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow public read access to issues" ON issues FOR SELECT USING (true);
-CREATE POLICY "Allow public insert access to issues" ON issues FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public update access to issues" ON issues FOR UPDATE USING (true);
+-- ── ALTER TABLE — add priority columns if running on an ──────
+-- existing database that was created before this update.
+-- These statements are safe to run even if the columns exist.
+-- ─────────────────────────────────────────────────────────────
+ALTER TABLE civic_reports ADD COLUMN IF NOT EXISTS priority_score    INT              DEFAULT 0;
+ALTER TABLE civic_reports ADD COLUMN IF NOT EXISTS priority_level    TEXT             DEFAULT 'LOW';
+ALTER TABLE civic_reports ADD COLUMN IF NOT EXISTS nearby_facility   BOOLEAN          DEFAULT FALSE;
+ALTER TABLE civic_reports ADD COLUMN IF NOT EXISTS facility_type     TEXT;
+ALTER TABLE civic_reports ADD COLUMN IF NOT EXISTS facility_name     TEXT;
+ALTER TABLE civic_reports ADD COLUMN IF NOT EXISTS facility_distance DOUBLE PRECISION;
+ALTER TABLE civic_reports ADD COLUMN IF NOT EXISTS high_traffic_area BOOLEAN          DEFAULT FALSE;
 
+-- ── Row Level Security (RLS) ──────────────────────────────────
+-- Allows the frontend to read/write through the Supabase anon key
+-- without needing to authenticate individual users.
+-- ─────────────────────────────────────────────────────────────
 ALTER TABLE civic_reports ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow public read access" ON civic_reports FOR SELECT USING (true);
-CREATE POLICY "Allow public insert access" ON civic_reports FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public update access" ON civic_reports FOR UPDATE USING (true);
+
+-- Only create policies if they do not already exist
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'civic_reports' AND policyname = 'Allow public read access'
+  ) THEN
+    CREATE POLICY "Allow public read access"
+      ON civic_reports FOR SELECT USING (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'civic_reports' AND policyname = 'Allow public insert access'
+  ) THEN
+    CREATE POLICY "Allow public insert access"
+      ON civic_reports FOR INSERT WITH CHECK (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'civic_reports' AND policyname = 'Allow public update access'
+  ) THEN
+    CREATE POLICY "Allow public update access"
+      ON civic_reports FOR UPDATE USING (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'civic_reports' AND policyname = 'Allow public delete access'
+  ) THEN
+    CREATE POLICY "Allow public delete access"
+      ON civic_reports FOR DELETE USING (true);
+  END IF;
+END
+$$;
