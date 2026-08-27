@@ -165,10 +165,16 @@
               <label class="text-xs font-bold text-slate-700 uppercase tracking-wider" id="txt-lbl-desc">
                 2. Describe the Issue
               </label>
-              <button type="button" id="voice-btn" onclick="toggleVoiceInput()" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100 transition">
-                <i class="fa-solid fa-microphone" id="voice-icon"></i>
-                <span id="voice-text">Record Voice</span>
-              </button>
+              <div class="flex items-center gap-1.5">
+                <button type="button" id="voice-btn" onclick="toggleVoiceInput()" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100 transition">
+                  <i class="fa-solid fa-microphone" id="voice-icon"></i>
+                  <span id="voice-text">Record Voice</span>
+                </button>
+                <button type="button" id="voice-stop-btn" onclick="stopVoiceInput()" class="hidden inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-rose-600 hover:bg-rose-700 text-white shadow-sm transition">
+                  <i class="fa-solid fa-stop"></i>
+                  <span>Stop</span>
+                </button>
+              </div>
             </div>
             <textarea id="report-desc" rows="3" required placeholder="Type or click the microphone to speak..." class="w-full p-3 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
           </div>
@@ -505,6 +511,7 @@
       }
 
       const voiceBtn = document.getElementById('voice-btn');
+      const voiceStopBtn = document.getElementById('voice-stop-btn');
       const voiceText = document.getElementById('voice-text');
       const descInput = document.getElementById('report-desc');
 
@@ -523,12 +530,14 @@
           finalTranscript = descInput.value; // Start with current text
           voiceBtn.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-600 border border-red-300 animate-pulse";
           voiceText.innerText = i18n[currentLang].recording;
+          voiceStopBtn.classList.remove('hidden');
         };
 
         recognitionInstance.onend = () => {
           isRecordingVoice = false;
           voiceBtn.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100 transition";
           voiceText.innerText = i18n[currentLang].recordVoice;
+          voiceStopBtn.classList.add('hidden');
         };
 
         recognitionInstance.onerror = (event) => {
@@ -536,6 +545,7 @@
           isRecordingVoice = false;
           voiceBtn.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100 transition";
           voiceText.innerText = i18n[currentLang].recordVoice;
+          voiceStopBtn.classList.add('hidden');
         };
 
         recognitionInstance.onresult = (event) => {
@@ -557,6 +567,12 @@
         recognitionInstance.stop();
       } else {
         recognitionInstance.start();
+      }
+    }
+
+    function stopVoiceInput() {
+      if (recognitionInstance && isRecordingVoice) {
+        recognitionInstance.stop();
       }
     }
 
