@@ -19,18 +19,32 @@ if (supabaseUrl && supabaseKey && !supabaseUrl.includes('your-supabase-project')
   console.warn('Supabase URL/Key missing or default. Operating with mock database fallback.');
 }
 
-// Configure multer for local file uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, path.join(__dirname, 'public/uploads'));
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname) || '.jpg';
-    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
+// Configure multer with memory storage (works on Vercel / serverless environments)
+const upload = multer({ storage: multer.memoryStorage() });
+
+/**
+ * Uploads an image buffer to Supabase Storage and returns its public URL.
+ * Falls back to a placeholder URL if Supabase is not configured.
+ * @param {Buffer} buffer - File buffer from multer memoryStorage
+ * @param {string} originalname - Original filename for extension detection
+ * @returns {Promise<string>} Public URL of the uploaded image
+ */
+async function uploadImageToSupabase(buffer, originalname) {
+  if (!supabase) {
+    return 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=500&q=80';
   }
-});
-const upload = multer({ storage: storage });
+  const ext = path.extname(originalname) || '.jpg';
+  const filename = `report-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+  const { error } = await supabase.storage
+    .from('report-images')
+    .upload(filename, buffer, { contentType: 'image/jpeg', upsert: false });
+  if (error) {
+    console.error('Supabase Storage upload error:', error.message);
+    return 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=500&q=80';
+  }
+  const { data: publicData } = supabase.storage.from('report-images').getPublicUrl(filename);
+  return publicData.publicUrl;
+}
 
 // Middleware
 app.use(express.json());
@@ -361,7 +375,8 @@ app.post('/api/reports', upload.single('image'), async (req, res) => {
 
   let imageUrl = "https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=500&q=80";
   if (req.file) {
-    imageUrl = `/uploads/${req.file.filename}`;
+    // Upload to Supabase Storage (works on Vercel; local disk is ephemeral)
+    imageUrl = await uploadImageToSupabase(req.file.buffer, req.file.originalname);
   } else if (req.body.imageUrl) {
     imageUrl = req.body.imageUrl;
   }
