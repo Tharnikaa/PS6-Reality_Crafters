@@ -8,10 +8,12 @@
 // ============================================================
 
 require('dotenv').config();
+const fs      = require('fs');
 const express = require('express');
 const path    = require('path');
 const multer  = require('multer');
 const { createClient } = require('@supabase/supabase-js');
+const { analyzeCivicReport } = require('./aiAnalyser');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -85,13 +87,16 @@ function formatReportRow(row) {
     device_id:        row.device_id || row.deviceId,
     timestamp_ms:     row.timestamp_ms || (row.timestamp && !isNaN(new Date(row.timestamp).getTime()) ? new Date(row.timestamp).getTime() : Date.now()),
     // Priority fields — returned to the frontend for display
+    priority:           row.priority          || (row.priority_level ? `${row.priority_level} Priority` : 'Medium Priority'),
     priority_score:     row.priority_score    || 0,
     priority_level:     row.priority_level    || 'LOW',
     nearby_facility:    row.nearby_facility   || false,
     facility_type:      row.facility_type     || null,
     facility_name:      row.facility_name     || null,
     facility_distance:  row.facility_distance || null,
-    high_traffic_area:  row.high_traffic_area || false
+    high_traffic_area:  row.high_traffic_area || false,
+    zoneInfo:           row.zone_info || row.zoneInfo || {},
+    aiAnalysis:         row.ai_analysis || row.aiAnalysis || {}
   };
 }
 
@@ -494,23 +499,44 @@ app.post('/api/reports', upload.single('image'), async (req, res) => {
 
   // ── 1. Upload image ──────────────────────────────────────
   let imageUrl = 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=500&q=80';
+  let tempImagePath = null;
   if (req.file) {
     imageUrl = await uploadImageToSupabase(req.file.buffer, req.file.originalname);
+    try {
+      const uploadsDir = path.join(__dirname, 'public/uploads');
+      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+      tempImagePath = path.join(uploadsDir, `temp-${Date.now()}-${req.file.originalname}`);
+      fs.writeFileSync(tempImagePath, req.file.buffer);
+    } catch (e) {
+      console.warn('Could not save temp file for image analysis:', e.message);
+    }
   } else if (req.body.imageUrl) {
     imageUrl = req.body.imageUrl;
   }
 
-  // ── 2. Classify category & department ───────────────────
-  const { category, department } = classifyReport(description);
+  // ── 2. Run Multimodal AI Triage (Gemini LLM / Vision / Location-Aware) ──
+  let aiTriage = null;
+  try {
+    aiTriage = await analyzeCivicReport(description, tempImagePath, location);
+  } catch (aiErr) {
+    console.error('AI Triage error, using fallback classification:', aiErr.message);
+  }
+
+  if (tempImagePath && fs.existsSync(tempImagePath)) {
+    try { fs.unlinkSync(tempImagePath); } catch (e) {}
+  }
+
+  // ── 3. Classify category & department ───────────────────
+  const defaultClass = classifyReport(description);
+  const category   = (aiTriage && aiTriage.category) ? aiTriage.category : defaultClass.category;
+  const department = (aiTriage && aiTriage.department) ? aiTriage.department : defaultClass.department;
 
   const newLat      = parseFloat(lat) || 13.0827;
   const newLng      = parseFloat(lng) || 80.2707;
   const reportLoc   = location || 'Anna Salai, Chennai (GPS Locked)';
   const reportId    = `REP-${Math.floor(1000 + Math.random() * 9000)}`;
 
-  // ── 3. Build the initial report object ──────────────────
-  // These are safe defaults. All priority fields will be
-  // recalculated and updated after the report is saved.
+  // ── 4. Build the initial report object ──────────────────
   const initialReport = {
     id:               reportId,
     category,
@@ -520,8 +546,8 @@ app.post('/api/reports', upload.single('image'), async (req, res) => {
     lat:              newLat,
     lng:              newLng,
     status:           'Pending',
-    severity:         2,        // default LOW, will be updated
-    duplicates_count: 1,        // default, will be updated
+    severity:         (aiTriage && aiTriage.severity) ? aiTriage.severity : 2,
+    duplicates_count: 1,
     image_url:        imageUrl,
     reporter_phone:   reporterPhone || '+91 9876543210',
     priority_score:   0,
@@ -530,7 +556,9 @@ app.post('/api/reports', upload.single('image'), async (req, res) => {
     facility_type:    null,
     facility_name:    null,
     facility_distance: null,
-    high_traffic_area: false
+    high_traffic_area: false,
+    zone_info:        (aiTriage && aiTriage.zoneInfo) ? aiTriage.zoneInfo : {},
+    ai_analysis:      (aiTriage && aiTriage.analysis) ? aiTriage.analysis : {}
   };
 
   const deviceIdentifier = req.body.device_id || req.body.deviceId || req.headers['x-device-id'] || 'device-default';
@@ -713,8 +741,12 @@ app.post('/api/reports', upload.single('image'), async (req, res) => {
     success: true,
     spam: false,
     deleted: false,
+    aiTriage: aiTriage,
     report: {
       ...formatReportRow(initialReport),
+      category,
+      department,
+      priority:          (aiTriage && aiTriage.priority) ? aiTriage.priority : `${priorityLevel} Priority`,
       duplicatesCount:   duplicateCount,
       priority_score:    priorityScore,
       priority_level:    priorityLevel,
@@ -723,7 +755,9 @@ app.post('/api/reports', upload.single('image'), async (req, res) => {
       facility_name:     facilityResult.name,
       facility_distance: facilityResult.distance,
       high_traffic_area: isTraffic,
-      severity
+      severity:          (aiTriage && aiTriage.severity) ? aiTriage.severity : severity,
+      zoneInfo:          (aiTriage && aiTriage.zoneInfo) ? aiTriage.zoneInfo : {},
+      aiAnalysis:        (aiTriage && aiTriage.analysis) ? aiTriage.analysis : {}
     }
   });
 });
