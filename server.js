@@ -696,13 +696,23 @@ app.get('/api/reports', async (req, res) => {
         .select('*')
         .order('timestamp', { ascending: false });
 
-      if (!error) allData = data || [];
+      if (!error && data) allData = data;
     } catch (err) {
       console.error('GET /api/reports Supabase error, using fallback:', err.message);
       allData = fallbackReports;
     }
   } else {
     allData = fallbackReports;
+  }
+
+  // Combine any fallbackReports saved in memory
+  if (fallbackReports.length > 0) {
+    const existingIds = new Set(allData.map(r => String(r.id)));
+    fallbackReports.forEach(fb => {
+      if (fb && fb.id && !existingIds.has(String(fb.id))) {
+        allData.unshift(fb);
+      }
+    });
   }
 
   const { enrichedReports } = enrichReportsWithClusters(allData);
@@ -972,8 +982,8 @@ app.post('/api/reports', authenticateToken, upload.single('image'), async (req, 
         throw error;
       }
     } catch (err) {
-      console.error('Failed to save report to Supabase:', err.message);
-      return res.status(500).json({ success: false, message: 'Could not save report. Please try again.', details: err.message });
+      console.warn('Failed to save report to Supabase, saving to memory fallback:', err.message);
+      fallbackReports.unshift(formatReportRow(initialReport));
     }
   } else {
     // In-memory fallback
