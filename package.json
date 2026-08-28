@@ -2,8 +2,10 @@
   "name": "public.ps6",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
     "test": "node tests/categorization.test.js",
     "test:spam": "node tests/spamDetection.test.js",
     "test:gate": "node tests/spamGate.test.js",
