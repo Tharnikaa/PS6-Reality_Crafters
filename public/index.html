@@ -2292,9 +2292,12 @@
         });
         const data = await res.json();
         if (data.success && data.report) {
-          if (!civicReports.some(r => r.id === data.report.id)) {
-            civicReports.unshift(data.report);
+          const existingIdx = civicReports.findIndex(r => r.id === data.report.id);
+          if (existingIdx !== -1) {
+            civicReports.splice(existingIdx, 1);
           }
+          civicReports.unshift(data.report);
+          
           await fetchReports();
           renderCitizenReports();
         } else {

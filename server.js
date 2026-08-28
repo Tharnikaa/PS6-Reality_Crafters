@@ -1053,7 +1053,8 @@ app.post('/api/reports', authenticateToken, upload.single('image'), async (req, 
         priority_score:    masterPriorityResult.priorityScore,
         priority_level:    masterPriorityResult.priority.startsWith('Critical') ? 'CRITICAL' : (masterPriorityResult.priority.startsWith('High') ? 'HIGH' : 'MEDIUM'),
         priority_reason:   masterPriorityResult.priorityReason,
-        priority_factors:  masterPriorityResult.factors
+        priority_factors:  masterPriorityResult.factors,
+        timestamp:         new Date().toISOString()
       };
 
       if (supabase) {
@@ -1063,26 +1064,28 @@ app.post('/api/reports', authenticateToken, upload.single('image'), async (req, 
         } catch (dbErr) {
           console.warn('[DUPLICATE MERGE] DB update warning:', dbErr.message);
         }
-      } else {
-        // In-memory fallback
-        const childInMem = fallbackReports.find(r => r.id === reportId);
-        if (childInMem) {
-          childInMem.master_issue_id = masterId;
-          childInMem.masterIssueId   = masterId;
-          childInMem.issue_id        = masterId;
-        }
-        const masterInMem = fallbackReports.find(r => r.id === masterId);
-        if (masterInMem) {
-          masterInMem.duplicates_count = newMasterCount;
-          masterInMem.duplicatesCount  = newMasterCount;
-          masterInMem.priority         = masterPriorityResult.priority;
-          masterInMem.priority_score   = masterPriorityResult.priorityScore;
-          masterInMem.priorityScore    = masterPriorityResult.priorityScore;
-          masterInMem.priority_reason  = masterPriorityResult.priorityReason;
-          masterInMem.priorityReason   = masterPriorityResult.priorityReason;
-          masterInMem.priority_factors = masterPriorityResult.factors;
-          masterInMem.priorityFactors  = masterPriorityResult.factors;
-        }
+      }
+
+      // ALWAYS update memory fallback to ensure UI sync if DB fails
+      const childInMem = fallbackReports.find(r => r.id === reportId);
+      if (childInMem) {
+        childInMem.master_issue_id = masterId;
+        childInMem.masterIssueId   = masterId;
+        childInMem.issue_id        = masterId;
+      }
+      const masterInMem = fallbackReports.find(r => r.id === masterId);
+      if (masterInMem) {
+        masterInMem.duplicates_count = newMasterCount;
+        masterInMem.duplicatesCount  = newMasterCount;
+        masterInMem.priority         = masterPriorityResult.priority;
+        masterInMem.priority_score   = masterPriorityResult.priorityScore;
+        masterInMem.priorityScore    = masterPriorityResult.priorityScore;
+        masterInMem.priority_reason  = masterPriorityResult.priorityReason;
+        masterInMem.priorityReason   = masterPriorityResult.priorityReason;
+        masterInMem.priority_factors = masterPriorityResult.factors;
+        masterInMem.priorityFactors  = masterPriorityResult.factors;
+        masterInMem.timestamp        = masterUpdatePayload.timestamp;
+        masterInMem.timestamp_ms     = new Date(masterUpdatePayload.timestamp).getTime();
       }
 
       const updatedMasterRow = {
@@ -1095,7 +1098,8 @@ app.post('/api/reports', authenticateToken, upload.single('image'), async (req, 
         priority_reason:  masterPriorityResult.priorityReason,
         priorityReason:   masterPriorityResult.priorityReason,
         priority_factors: masterPriorityResult.factors,
-        priorityFactors:  masterPriorityResult.factors
+        priorityFactors:  masterPriorityResult.factors,
+        timestamp:        masterUpdatePayload.timestamp
       };
 
       return res.status(200).json({
@@ -1135,16 +1139,18 @@ app.post('/api/reports', authenticateToken, upload.single('image'), async (req, 
         } catch (dbErr) {
           console.warn('[NEW MASTER] DB update warning:', dbErr.message);
         }
-      } else {
-        const inMem = fallbackReports.find(r => r.id === reportId);
-        if (inMem) {
-          inMem.master_issue_id = null;
-          inMem.duplicates_count = 1;
-          inMem.priority         = priorityResult.priority;
-          inMem.priority_score   = priorityResult.priorityScore;
-          inMem.priority_reason  = priorityResult.priorityReason;
-          inMem.priority_factors = priorityResult.factors;
-        }
+      }
+
+      // ALWAYS update memory fallback to ensure UI sync if DB fails
+      const inMem = fallbackReports.find(r => r.id === reportId);
+      if (inMem) {
+        inMem.master_issue_id = null;
+        inMem.duplicates_count = 1;
+        inMem.priority         = priorityResult.priority;
+        inMem.priority_score   = priorityResult.priorityScore;
+        inMem.priority_reason  = priorityResult.priorityReason;
+        inMem.priority_factors = priorityResult.factors;
+        inMem.severity         = initialSeverity;
       }
 
       const finalMasterReport = {
