@@ -41,7 +41,10 @@ const { authRateLimiter } = require('./backend/rateLimiter');
 // in memory and upload it straight to Supabase Storage.
 const upload = multer({ storage: multer.memoryStorage() });
 
+const cors    = require('cors');
+
 // ── Middleware ───────────────────────────────────────────────
+app.use(cors()); // Allow all origins for Vercel / Mobile App compatibility
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
