@@ -387,16 +387,16 @@
       <div id="public-signin-box">
         <div class="text-center mb-6">
           <div class="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[11px] font-bold border border-emerald-200 mb-3">
-            <i class="fa-solid fa-shield-halved"></i> Official Citizen Access
+            <i class="fa-solid fa-shield-halved"></i> <span id="txt-official-citizen-access">Official Citizen Access</span>
           </div>
           <h2 class="text-2xl font-black text-slate-900 tracking-tight" id="txt-public-login-title">PUBLIC LOGIN</h2>
-          <p class="text-xs text-indigo-600 font-semibold uppercase tracking-wider mt-1">Welcome to CivicConnect</p>
-          <p class="text-xs text-slate-500 mt-1">Sign in with your mobile number & CAPTCHA verification.</p>
+          <p class="text-xs text-indigo-600 font-semibold uppercase tracking-wider mt-1" id="txt-public-login-sub1">Welcome to CivicConnect</p>
+          <p class="text-xs text-slate-500 mt-1" id="txt-public-login-sub2">Sign in with your mobile number & CAPTCHA verification.</p>
         </div>
         
         <form onsubmit="handlePublicSignin(event)" class="space-y-4">
           <div>
-            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Mobile Number</label>
+            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1" id="txt-lbl-mobile-signin">Mobile Number</label>
             <input type="tel" id="public-mobile-input" required placeholder="+91 9876543210" oninput="resetCaptchaIfMobileChanged()" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-base focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none font-medium">
           </div>
 
@@ -409,14 +409,14 @@
           <div id="public-signin-error" class="hidden p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl font-medium text-center"></div>
 
           <button type="submit" id="btn-public-signin" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-lg hover:shadow-xl transition transform active:scale-95">
-            SIGN IN &rarr;
+            <span id="txt-btn-signin-submit">SIGN IN &rarr;</span>
           </button>
         </form>
 
         <div class="mt-4 text-center pt-4 border-t border-slate-100">
           <p class="text-xs text-slate-500">
-            Don't have an account? 
-            <button type="button" onclick="togglePublicAuthMode('signup')" class="font-bold text-indigo-600 hover:underline">SIGN UP</button>
+            <span id="txt-no-account">Don't have an account?</span> 
+            <button type="button" onclick="togglePublicAuthMode('signup')" class="font-bold text-indigo-600 hover:underline" id="txt-btn-goto-signup">SIGN UP</button>
           </p>
         </div>
       </div>
@@ -424,17 +424,17 @@
       <!-- SIGN UP VIEW (Hidden initially) -->
       <div id="public-signup-box" class="hidden">
         <div class="text-center mb-6">
-          <h2 class="text-2xl font-black text-slate-900 tracking-tight">CREATE ACCOUNT</h2>
-          <p class="text-xs text-emerald-600 font-semibold uppercase tracking-wider mt-1">Public Citizen Registration</p>
-          <p class="text-xs text-slate-500 mt-1">Register your mobile number to report & track civic issues.</p>
+          <h2 class="text-2xl font-black text-slate-900 tracking-tight" id="txt-public-signup-title">CREATE ACCOUNT</h2>
+          <p class="text-xs text-emerald-600 font-semibold uppercase tracking-wider mt-1" id="txt-public-signup-sub1">Public Citizen Registration</p>
+          <p class="text-xs text-slate-500 mt-1" id="txt-public-signup-sub2">Register your mobile number to report & track civic issues.</p>
         </div>
         
         <form onsubmit="handlePublicSignup(event)" class="space-y-4">
           <div>
-            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Full Name (Optional)</label>
+            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1" id="txt-lbl-signup-fullname">Full Name (Optional)</label>
             <input type="text" id="public-signup-name" placeholder="e.g. Anand S" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none font-medium mb-3">
 
-            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Mobile Number</label>
+            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1" id="txt-lbl-signup-mobile">Mobile Number</label>
             <input type="tel" id="public-signup-mobile" required placeholder="+91 9876543210" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none font-medium">
           </div>
 
@@ -447,14 +447,14 @@
           <div id="public-signup-error" class="hidden p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl font-medium text-center"></div>
 
           <button type="submit" id="btn-public-signup" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-lg hover:shadow-xl transition transform active:scale-95">
-            SIGN UP &rarr;
+            <span id="txt-btn-signup-submit">SIGN UP &rarr;</span>
           </button>
         </form>
 
         <div class="mt-4 text-center pt-4 border-t border-slate-100">
           <p class="text-xs text-slate-500">
-            Already have an account? 
-            <button type="button" onclick="togglePublicAuthMode('signin')" class="font-bold text-indigo-600 hover:underline">SIGN IN</button>
+            <span id="txt-has-account">Already have an account?</span> 
+            <button type="button" onclick="togglePublicAuthMode('signin')" class="font-bold text-indigo-600 hover:underline" id="txt-btn-goto-signin">SIGN IN</button>
           </p>
         </div>
       </div>
@@ -918,7 +918,25 @@
         portalSub: "Select your portal to continue",
         assistTitle: "Need Assistance?",
         assistDesc: "If you face any issue logging in, call our 24/7 Helpline at 1800-123-CIVIC or request help at your nearest Ward Office.",
-        backShowcase: "Back to Government Showcase"
+        backShowcase: "Back to Government Showcase",
+        officialCitizenAccess: "Official Citizen Access",
+        publicLoginTitle: "PUBLIC LOGIN",
+        publicLoginSub1: "Welcome to CivicConnect",
+        publicLoginSub2: "Sign in with your mobile number & CAPTCHA verification.",
+        lblMobileSignin: "Mobile Number",
+        btnSigninSubmit: "SIGN IN →",
+        noAccount: "Don't have an account?",
+        btnGotoSignup: "SIGN UP",
+        publicSignupTitle: "CREATE ACCOUNT",
+        publicSignupSub1: "Public Citizen Registration",
+        publicSignupSub2: "Register your mobile number to report & track civic issues.",
+        lblSignupFullname: "Full Name (Optional)",
+        lblSignupMobile: "Mobile Number",
+        btnSignupSubmit: "SIGN UP →",
+        hasAccount: "Already have an account?",
+        btnGotoSignin: "SIGN IN",
+        lblStaffEmail: "Official Email ID",
+        lblStaffPassword: "Staff Password"
       },
       ta: {
         title: "மக்கள் சேவை",
@@ -1032,7 +1050,25 @@
         portalSub: "தொடர உங்கள் தளத்தைத் தேர்ந்தெடுக்கவும்",
         assistTitle: "உதவி தேவையா?",
         assistDesc: "உள்நுழைவதில் சிக்கல் இருந்தால், எங்கள் 24/7 உதவி எண் 1800-123-CIVIC ஐ அழைக்கவும் அல்லது வார்டு அலுவலகத்தை அணுகவும்.",
-        backShowcase: "அரசு தளம் செல்ல"
+        backShowcase: "அரசு தளம் செல்ல",
+        officialCitizenAccess: "அரசு அங்கீகரிக்கப்பட்ட பொதுமக்கள் அணுகல்",
+        publicLoginTitle: "பொதுமக்கள் உள்நுழைவு",
+        publicLoginSub1: "CivicConnect தளத்திற்கு வரவேற்கிறோம்",
+        publicLoginSub2: "உங்கள் கைபேசி எண் மற்றும் CAPTCHA மூலம் உள்நுழையவும்.",
+        lblMobileSignin: "கைபேசி எண்",
+        btnSigninSubmit: "உள்நுழைக →",
+        noAccount: "கணக்கு இல்லையா?",
+        btnGotoSignup: "பதிவு செய்க (SIGN UP)",
+        publicSignupTitle: "கணக்கை உருவாக்கவும்",
+        publicSignupSub1: "பொதுமக்கள் பதிவு தளம்",
+        publicSignupSub2: "புகார்களைப் பதிவு செய்ய உங்கள் எண்ணைப் பதிவு செய்யவும்.",
+        lblSignupFullname: "முழு பெயர் (விருப்பப்பட்டால்)",
+        lblSignupMobile: "கைபேசி எண்",
+        btnSignupSubmit: "பதிவு செய்க →",
+        hasAccount: "ஏற்கனவே கணக்கு உள்ளதா?",
+        btnGotoSignin: "உள்நுழையவும் (SIGN IN)",
+        lblStaffEmail: "அதிகாரப்பூர்வ மின்னஞ்சல் முகவரி",
+        lblStaffPassword: "அதிகாரப்பூர்வ கடவுச்சொல்"
       },
       hi: {
         title: "नागरिक समाधान",
@@ -1146,7 +1182,25 @@
         portalSub: "आगे बढ़ने के लिए अपना पोर्टल चुनें",
         assistTitle: "सहायता चाहिए?",
         assistDesc: "यदि आपको लॉगिन में समस्या आ रही है, तो हमारी 24/7 हेल्पलाइन 1800-123-CIVIC पर कॉल करें।",
-        backShowcase: "सरकारी पोर्टल पर वापस जाएं"
+        backShowcase: "सरकारी पोर्टल पर वापस जाएं",
+        officialCitizenAccess: "आधिकारिक नागरिक पहुंच",
+        publicLoginTitle: "नागरिक लॉगिन",
+        publicLoginSub1: "CivicConnect में आपका स्वागत है",
+        publicLoginSub2: "अपने मोबाइल नंबर और CAPTCHA के साथ साइन इन करें।",
+        lblMobileSignin: "मोबाइल नंबर",
+        btnSigninSubmit: "साइन इन करें →",
+        noAccount: "खाता नहीं है?",
+        btnGotoSignup: "साइन अप करें (SIGN UP)",
+        publicSignupTitle: "नया खाता बनाएं",
+        publicSignupSub1: "नागरिक पंजीकरण",
+        publicSignupSub2: "शिकायत दर्ज और ट्रैक करने के लिए अपना मोबाइल नंबर पंजीकृत करें।",
+        lblSignupFullname: "पूरा नाम (वैकल्पिक)",
+        lblSignupMobile: "मोबाइल नंबर",
+        btnSignupSubmit: "साइन अप करें →",
+        hasAccount: "पहले से खाता है?",
+        btnGotoSignin: "साइन इन करें (SIGN IN)",
+        lblStaffEmail: "आधिकारिक ईमेल आईडी",
+        lblStaffPassword: "कर्मचारी पासवर्ड"
       }
     };
 
@@ -1738,6 +1792,25 @@
       setT('txt-back-citizen', dict.backShowcase);
       setT('txt-back-admin', dict.backShowcase);
 
+      // Public Login & Sign Up Translations
+      setT('txt-official-citizen-access', dict.officialCitizenAccess);
+      setT('txt-public-login-title', dict.publicLoginTitle);
+      setT('txt-public-login-sub1', dict.publicLoginSub1);
+      setT('txt-public-login-sub2', dict.publicLoginSub2);
+      setT('txt-lbl-mobile-signin', dict.lblMobileSignin);
+      setT('txt-btn-signin-submit', dict.btnSigninSubmit);
+      setT('txt-no-account', dict.noAccount);
+      setT('txt-btn-goto-signup', dict.btnGotoSignup);
+
+      setT('txt-public-signup-title', dict.publicSignupTitle);
+      setT('txt-public-signup-sub1', dict.publicSignupSub1);
+      setT('txt-public-signup-sub2', dict.publicSignupSub2);
+      setT('txt-lbl-signup-fullname', dict.lblSignupFullname);
+      setT('txt-lbl-signup-mobile', dict.lblSignupMobile);
+      setT('txt-btn-signup-submit', dict.btnSignupSubmit);
+      setT('txt-has-account', dict.hasAccount);
+      setT('txt-btn-goto-signin', dict.btnGotoSignin);
+
       // Staff Login translation
       const txtStaffLoginTitle = document.getElementById('txt-staff-login-title');
       if (txtStaffLoginTitle) txtStaffLoginTitle.innerText = dict.staffLoginTitle;
@@ -1747,6 +1820,8 @@
       if (txtLblAssignedDept) txtLblAssignedDept.innerText = dict.lblAssignedDept;
       const txtLblStaffAccessKey = document.getElementById('txt-lbl-staff-access-key');
       if (txtLblStaffAccessKey) txtLblStaffAccessKey.innerText = dict.lblStaffAccessKey;
+      setT('txt-lbl-staff-email', dict.lblStaffEmail);
+      setT('txt-lbl-staff-password', dict.lblStaffPassword);
       const txtBtnOpenDashboard = document.getElementById('txt-btn-open-dashboard');
       if (txtBtnOpenDashboard) txtBtnOpenDashboard.innerText = dict.btnOpenDashboard;
 
@@ -2341,7 +2416,9 @@
 
             <!-- Resolution Status Roadmap -->
             <div class="mb-4 bg-slate-50 p-3 rounded-lg border border-slate-100">
-              <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Resolution Progress</div>
+              <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                ${currentLang === 'ta' ? 'தீர்வு முன்னேற்றம்' : (currentLang === 'hi' ? 'समाधान प्रगति' : 'Resolution Progress')}
+              </div>
               <div class="flex items-center justify-between relative mt-2 px-1">
                 <div class="absolute left-4 right-4 top-2 h-0.5 bg-slate-200 z-0"></div>
                 ${statusSteps.map((step, idx) => {
@@ -2381,10 +2458,10 @@
           ${rep.status === 'Resolved' ? `
             <div class="pt-3 border-t border-slate-100 flex items-center gap-2">
               <button onclick="confirmCitizenResolve('${rep.id}')" class="flex-1 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 rounded-lg text-xs font-semibold flex items-center justify-center gap-1">
-                <i class="fa-solid fa-thumbs-up"></i> Confirm Resolved
+                <i class="fa-solid fa-thumbs-up"></i> ${currentLang === 'ta' ? 'உறுதி செய்' : (currentLang === 'hi' ? 'पुष्टि करें' : 'Confirm Resolved')}
               </button>
               <button onclick="reopenCitizenIssue('${rep.id}')" class="flex-1 py-1.5 bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 rounded-lg text-xs font-semibold flex items-center justify-center gap-1">
-                <i class="fa-solid fa-rotate-left"></i> Reopen
+                <i class="fa-solid fa-rotate-left"></i> ${currentLang === 'ta' ? 'மீண்டும் திறக்க' : (currentLang === 'hi' ? 'புனஃ खोलें' : 'Reopen')}
               </button>
             </div>
           ` : ''}
