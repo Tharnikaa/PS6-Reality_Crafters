@@ -2266,11 +2266,14 @@
       submitBtn.disabled = true;
       submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> AI Triage & Routing...`;
 
+      const locInput = document.getElementById('report-location-input');
+      const locationVal = (locInput && locInput.value.trim()) ? locInput.value.trim() : (currentCoords.text || 'Anna Salai, Chennai (GPS Locked)');
+
       const formData = new FormData();
       formData.append('description', desc);
-      formData.append('location', currentCoords.text);
-      formData.append('lat', currentCoords.lat);
-      formData.append('lng', currentCoords.lng);
+      formData.append('location', locationVal);
+      formData.append('lat', currentCoords.lat || 13.0827);
+      formData.append('lng', currentCoords.lng || 80.2707);
       formData.append('reporterPhone', userPhone || "+91 9876543210");
       formData.append('device_id', getOrCreateDeviceId());
 
