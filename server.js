@@ -899,11 +899,27 @@ app.post('/api/reports', authenticateToken, upload.single('image'), async (req, 
       }
 
       // HTTP 422 UNPROCESSABLE ENTITY — REJECTED BEFORE DB INSERT
+      const mainReason = (spamGateResult.reasons && spamGateResult.reasons[0]) || '';
+      let userFriendlyMsg = "Report could not be accepted.";
+      
+      if (mainReason === 'SIGHTENGINE_MODERATION') {
+        userFriendlyMsg = "Report could not be accepted: The uploaded photo was flagged as irrelevant or inappropriate. Please upload a clear photo of the actual civic issue (e.g. road damage, garbage, or streetlight).";
+      } else if (mainReason === 'TOO_MANY_REPORTS_FROM_DEVICE') {
+        userFriendlyMsg = "Report could not be accepted: Frequent submissions detected from your device. Please wait 5 minutes before submitting another report.";
+      } else if (mainReason === 'NEAR_DUPLICATE_IMAGE' || mainReason === 'SEMANTIC_DUPLICATE') {
+        userFriendlyMsg = "Report could not be accepted: An identical report for this exact location has already been submitted recently.";
+      } else if (mainReason === 'NO_PHOTO') {
+        userFriendlyMsg = "Report could not be accepted: Please capture or attach a photo of the incident.";
+      } else if (mainReason === 'EMPTY_DESCRIPTION') {
+        userFriendlyMsg = "Report could not be accepted: Please provide a description of the issue.";
+      }
+
       return res.status(422).json({
         success: false,
         accepted: false,
         spam: true,
-        message: "Report could not be accepted."
+        reasons: spamGateResult.reasons,
+        message: userFriendlyMsg
       });
     }
 
