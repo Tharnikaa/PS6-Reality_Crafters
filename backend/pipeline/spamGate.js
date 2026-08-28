@@ -45,12 +45,8 @@ async function runMultiLayerSpamCheck(reportPayload, imageInput, options = {}) {
   let timeDifferenceVal = null;
 
   // -------------------------------------------------------------
-  // BASIC PAYLOAD VALIDATION: NO_PHOTO & EMPTY_DESCRIPTION
+  // BASIC PAYLOAD VALIDATION: EMPTY_DESCRIPTION
   // -------------------------------------------------------------
-  if (!imageInput || (typeof imageInput === 'string' && imageInput.trim() === '')) {
-    reasons.push('NO_PHOTO');
-  }
-
   if (reportPayload.description !== undefined && String(reportPayload.description).trim() === '') {
     reasons.push('EMPTY_DESCRIPTION');
   }
@@ -63,10 +59,11 @@ async function runMultiLayerSpamCheck(reportPayload, imageInput, options = {}) {
     deviceReportCount = await countRecentReportsFromDevice(deviceId, options);
   } catch (err) {
     console.error(`[SPAM] Device frequency check error: ${err.message}`);
-    throw err;
+    deviceReportCount = 0;
   }
 
-  if (deviceReportCount >= 3) {
+  const maxDeviceReports = Number(process.env.MAX_DEVICE_REPORTS || 15);
+  if (deviceReportCount >= maxDeviceReports) {
     reasons.push('TOO_MANY_REPORTS_FROM_DEVICE');
   }
 
