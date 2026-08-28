@@ -137,9 +137,12 @@ async function runMultiLayerSpamCheck(reportPayload, imageInput, options = {}) {
     }
   }
 
-  const isSpam = reasons.length > 0;
+  // Only malicious content or extreme flooding triggers isSpam rejection.
+  // Near-duplicates are passed to the duplicate merger pipeline to group into single issue cards.
+  const hardSpamReasons = reasons.filter(r => r !== 'NEAR_DUPLICATE_IMAGE' && r !== 'SEMANTIC_DUPLICATE');
+  const isSpam = hardSpamReasons.length > 0;
   const decisionStr = isSpam ? 'SPAM' : 'NOT_SPAM';
-  const mainReason = reasons[0] || 'NONE';
+  const mainReason = hardSpamReasons[0] || (reasons[0] || 'NONE');
 
   // REQUIRED TEMPORARY LOGGING
   console.log(`[SPAM CHECK]`);
