@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CivicResolve - Citizen & Municipal Portal</title>
-  <link rel="icon" type="image/png" href="/logo.png">
+  <link rel="icon" type="image/png" href="logo.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- Google reCAPTCHA v2 API -->
@@ -35,7 +35,7 @@
   <header class="bg-slate-900 text-white sticky top-0 z-50 shadow-md">
     <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center gap-2.5 cursor-pointer" onclick="showView('auth-select-view')">
-        <img src="/logo.png" alt="CivicResolve Logo" class="h-8 w-auto object-contain rounded-md">
+        <img src="logo.png" alt="CivicResolve Logo" class="h-8 w-auto object-contain rounded-md">
         <span class="font-bold text-lg tracking-tight" id="nav-brand">CivicResolve</span>
       </div>
 
@@ -64,50 +64,331 @@
   <!-- MAIN CONTAINER -->
   <main class="max-w-6xl mx-auto p-4 md:p-6 flex-1 w-full">
 
-    <!-- 1. AUTH SELECTION VIEW -->
-    <section id="auth-select-view" class="max-w-md mx-auto mt-10 text-center">
-      <div class="inline-flex p-3 bg-white rounded-2xl mb-4 shadow-sm border border-slate-200">
-        <img src="/logo.png" alt="CivicResolve Logo" class="h-16 w-auto object-contain">
-      </div>
-      <h1 class="text-2xl font-bold text-slate-900 mb-2" id="txt-app-title">CivicResolve</h1>
-      <p class="text-xs text-slate-600 mb-8" id="txt-app-subtitle">AI-Powered Civic Issue Reporting & Municipal Triage</p>
+    <!-- 1. AUTH SELECTION & CITIZEN TRUST SHOWCASE VIEW -->
+    <section id="auth-select-view" class="max-w-6xl mx-auto my-4 space-y-8">
+      
+      <!-- HERO / TRUST BANNER -->
+      <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-10 text-white shadow-xl relative overflow-hidden border border-slate-800">
+        <!-- Background subtle glow decoration -->
+        <div class="absolute -top-24 -right-24 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute -bottom-24 -left-24 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
-      <div class="space-y-4">
-        <button onclick="showView('citizen-login-view')" class="w-full flex items-center justify-between p-4 bg-white border-2 border-indigo-100 hover:border-indigo-600 rounded-xl shadow-sm transition text-left group">
-          <div class="flex items-center gap-3">
-            <div class="p-2.5 bg-indigo-50 text-indigo-600 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition">
-              <i class="fa-solid fa-user"></i>
+        <div class="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          <div class="lg:col-span-8 space-y-4">
+            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold uppercase tracking-wider">
+              <i class="fa-solid fa-circle-check text-emerald-400"></i> <span id="txt-hero-official-badge">Official Municipal Governance Portal</span>
             </div>
-            <div>
-              <div class="font-semibold text-slate-800 text-sm" id="txt-btn-citizen">Citizen Portal</div>
-              <div class="text-xs text-slate-500" id="txt-btn-citizen-sub">Report road damage, garbage, leaks</div>
+            <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-white leading-tight" id="txt-app-title">
+              CivicResolve
+            </h1>
+            <p class="text-base sm:text-lg text-slate-300 max-w-2xl font-normal leading-relaxed" id="txt-app-subtitle">
+              AI-Powered Civic Issue Reporting & Municipal Triage — Building Public Trust Through Action & Absolute Transparency.
+            </p>
+
+            <!-- TRUST METRICS RIBBON -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4">
+              <div class="bg-slate-800/80 backdrop-blur-sm border border-slate-700/60 p-3.5 rounded-2xl text-center">
+                <div class="text-2xl sm:text-3xl font-black text-emerald-400">14,850+</div>
+                <div class="text-[11px] sm:text-xs font-semibold text-slate-300 uppercase tracking-wide mt-0.5" id="txt-stat-fixed-lbl">Issues Fixed</div>
+              </div>
+              <div class="bg-slate-800/80 backdrop-blur-sm border border-slate-700/60 p-3.5 rounded-2xl text-center">
+                <div class="text-2xl sm:text-3xl font-black text-amber-400">24 Hrs</div>
+                <div class="text-[11px] sm:text-xs font-semibold text-slate-300 uppercase tracking-wide mt-0.5" id="txt-stat-avg-lbl">Avg Resolution</div>
+              </div>
+              <div class="bg-slate-800/80 backdrop-blur-sm border border-slate-700/60 p-3.5 rounded-2xl text-center">
+                <div class="text-2xl sm:text-3xl font-black text-cyan-400">98.4%</div>
+                <div class="text-[11px] sm:text-xs font-semibold text-slate-300 uppercase tracking-wide mt-0.5" id="txt-stat-sat-lbl">Citizen Satisfaction</div>
+              </div>
+              <div class="bg-slate-800/80 backdrop-blur-sm border border-slate-700/60 p-3.5 rounded-2xl text-center">
+                <div class="text-2xl sm:text-3xl font-black text-indigo-400">100%</div>
+                <div class="text-[11px] sm:text-xs font-semibold text-slate-300 uppercase tracking-wide mt-0.5" id="txt-stat-track-lbl">Live Tracking</div>
+              </div>
             </div>
           </div>
-          <i class="fa-solid fa-chevron-right text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-1 transition text-sm"></i>
-        </button>
 
-        <button onclick="showView('admin-login-view')" class="w-full flex items-center justify-between p-4 bg-white border-2 border-slate-200 hover:border-slate-800 rounded-xl shadow-sm transition text-left group">
-          <div class="flex items-center gap-3">
-            <div class="p-2.5 bg-slate-100 text-slate-700 rounded-lg group-hover:bg-slate-900 group-hover:text-white transition">
-              <i class="fa-solid fa-shield-halved"></i>
-            </div>
+          <!-- Quick Toll-Free Callout in Hero Header -->
+          <div class="lg:col-span-4 bg-slate-800/90 border border-slate-700 p-5 rounded-2xl flex flex-col justify-between space-y-4">
             <div>
-              <div class="font-semibold text-slate-800 text-sm" id="txt-btn-admin">Municipal Staff Login</div>
-              <div class="text-xs text-slate-500" id="txt-btn-admin-sub">Department dashboard & live map</div>
+              <div class="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-wider mb-1">
+                <i class="fa-solid fa-phone-volume"></i> <span id="txt-helpline-tag">24/7 Citizen Helpline</span>
+              </div>
+              <div class="text-xl font-bold text-white" id="txt-helpline-title">Low Digital Familiarity?</div>
+              <p class="text-xs text-slate-300 mt-1" id="txt-helpline-desc">Call our toll-free municipal helpline anytime to register issues verbally or seek help.</p>
+            </div>
+            <a href="tel:18001232484" class="inline-flex items-center justify-center gap-2.5 px-4 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl shadow-lg transition text-sm">
+              <i class="fa-solid fa-phone"></i> <span id="txt-helpline-btn">Call Toll-Free: 1800-123-CIVIC</span>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- MAIN 2-COLUMN SECTION: RESOLVED ISSUES SHOWCASE & REPOSITIONED PORTAL LOGIN -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        
+        <!-- LEFT / MAIN COLUMN (Lg: 7 cols): PROVEN GOVERNMENT RESOLUTIONS & CITIZEN TRUST SHOWCASE -->
+        <div class="lg:col-span-7 space-y-8">
+          
+          <!-- SECTION 1: RESOLVED ISSUES SHOWCASE WITH IMAGES -->
+          <div class="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
+              <div>
+                <div class="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 uppercase tracking-wider mb-1">
+                  <i class="fa-solid fa-award"></i> <span id="txt-proof-tag">Proof of Action</span>
+                </div>
+                <h2 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight" id="txt-proof-title">Recent Problems Resolved by Government</h2>
+              </div>
+              <span class="inline-flex items-center px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full border border-emerald-200">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-ping"></span> <span id="txt-proof-badge">Live Updates</span>
+              </span>
+            </div>
+
+            <!-- RESOLVED CARDS GRID WITH REAL IMAGES -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              
+              <!-- Card 1: Pothole Repair -->
+              <div class="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden flex flex-col justify-between hover:shadow-lg transition duration-200 group">
+                <div>
+                  <div class="relative h-44 w-full overflow-hidden bg-slate-200">
+                    <img src="road_resolved.jpg" alt="Resolved Road Repair" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+                    <div class="absolute top-2.5 left-2.5 px-2.5 py-1 bg-slate-900/80 backdrop-blur-md text-white text-[11px] font-bold rounded-md" id="txt-card1-dept">Highways & Roads</div>
+                    <div class="absolute top-2.5 right-2.5 px-2.5 py-1 bg-emerald-500 text-white text-[11px] font-extrabold rounded-full shadow flex items-center gap-1">
+                      <i class="fa-solid fa-circle-check"></i> <span id="txt-card1-fixed">Fixed in 14h</span>
+                    </div>
+                  </div>
+                  <div class="p-4 space-y-2">
+                    <h3 class="font-bold text-slate-900 text-sm leading-snug" id="txt-card1-title">Major Pothole & Damaged Road Paved</h3>
+                    <p class="text-xs text-slate-600 leading-relaxed" id="txt-card1-desc">Hazardous pothole causing heavy traffic slowdown repaired with fresh asphalt layering.</p>
+                    <div class="bg-indigo-50/70 rounded-xl p-2.5 border border-indigo-100/80">
+                      <p class="text-[11px] text-indigo-950 italic font-medium" id="txt-card1-quote">“Road is super smooth now! Thank you municipal team!” — S. Kumar</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="p-4 pt-0">
+                  <div class="pt-3 border-t border-slate-200/80 flex items-center justify-between text-[11px] text-slate-500">
+                    <span id="txt-card1-loc"><i class="fa-solid fa-location-dot text-rose-500 mr-1"></i> Ward 14 (Anna Nagar)</span>
+                    <span class="font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200" id="txt-card1-ver">Verified by AI & Staff</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card 2: Water Leakage -->
+              <div class="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden flex flex-col justify-between hover:shadow-lg transition duration-200 group">
+                <div>
+                  <div class="relative h-44 w-full overflow-hidden bg-slate-200">
+                    <img src="water_resolved.jpg" alt="Resolved Water Leakage" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+                    <div class="absolute top-2.5 left-2.5 px-2.5 py-1 bg-slate-900/80 backdrop-blur-md text-white text-[11px] font-bold rounded-md" id="txt-card2-dept">Water Supply</div>
+                    <div class="absolute top-2.5 right-2.5 px-2.5 py-1 bg-emerald-500 text-white text-[11px] font-extrabold rounded-full shadow flex items-center gap-1">
+                      <i class="fa-solid fa-circle-check"></i> <span id="txt-card2-fixed">Fixed in 6h</span>
+                    </div>
+                  </div>
+                  <div class="p-4 space-y-2">
+                    <h3 class="font-bold text-slate-900 text-sm leading-snug" id="txt-card2-title">Main Pipeline Burst Repaired</h3>
+                    <p class="text-xs text-slate-600 leading-relaxed" id="txt-card2-desc">High-pressure drinking water leakage sealed and full supply restored to 400 households.</p>
+                    <div class="bg-indigo-50/70 rounded-xl p-2.5 border border-indigo-100/80">
+                      <p class="text-[11px] text-indigo-950 italic font-medium" id="txt-card2-quote">“Water flow restored before morning! Great work.” — Lakshmi Ammal</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="p-4 pt-0">
+                  <div class="pt-3 border-t border-slate-200/80 flex items-center justify-between text-[11px] text-slate-500">
+                    <span id="txt-card2-loc"><i class="fa-solid fa-location-dot text-rose-500 mr-1"></i> Ward 8 (Sector 4)</span>
+                    <span class="font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200" id="txt-card2-ver">Verified by Resident</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card 3: Streetlight Replacement -->
+              <div class="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden flex flex-col justify-between hover:shadow-lg transition duration-200 group">
+                <div>
+                  <div class="relative h-44 w-full overflow-hidden bg-slate-200">
+                    <img src="light_resolved.jpg" alt="Resolved Streetlight Replacement" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+                    <div class="absolute top-2.5 left-2.5 px-2.5 py-1 bg-slate-900/80 backdrop-blur-md text-white text-[11px] font-bold rounded-md" id="txt-card3-dept">Electrical Dept</div>
+                    <div class="absolute top-2.5 right-2.5 px-2.5 py-1 bg-emerald-500 text-white text-[11px] font-extrabold rounded-full shadow flex items-center gap-1">
+                      <i class="fa-solid fa-circle-check"></i> <span id="txt-card3-fixed">Fixed in 18h</span>
+                    </div>
+                  </div>
+                  <div class="p-4 space-y-2">
+                    <h3 class="font-bold text-slate-900 text-sm leading-snug" id="txt-card3-title">Dark Alley LED Streetlights Restored</h3>
+                    <p class="text-xs text-slate-600 leading-relaxed" id="txt-card3-desc">Faulty transformer wire fixed and 8 new energy-efficient LED streetlamps installed for safety.</p>
+                    <div class="bg-indigo-50/70 rounded-xl p-2.5 border border-indigo-100/80">
+                      <p class="text-[11px] text-indigo-950 italic font-medium" id="txt-card3-quote">“Market street is bright and safe for women at night.” — Venkatesh</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="p-4 pt-0">
+                  <div class="pt-3 border-t border-slate-200/80 flex items-center justify-between text-[11px] text-slate-500">
+                    <span id="txt-card3-loc"><i class="fa-solid fa-location-dot text-rose-500 mr-1"></i> Ward 22 (Market Rd)</span>
+                    <span class="font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200" id="txt-card3-ver">Verified by Staff</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card 4: Garbage Clearance -->
+              <div class="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden flex flex-col justify-between hover:shadow-lg transition duration-200 group">
+                <div>
+                  <div class="relative h-44 w-full overflow-hidden bg-slate-200">
+                    <img src="waste_resolved.jpg" alt="Resolved Waste Clearance" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+                    <div class="absolute top-2.5 left-2.5 px-2.5 py-1 bg-slate-900/80 backdrop-blur-md text-white text-[11px] font-bold rounded-md" id="txt-card4-dept">Solid Waste</div>
+                    <div class="absolute top-2.5 right-2.5 px-2.5 py-1 bg-emerald-500 text-white text-[11px] font-extrabold rounded-full shadow flex items-center gap-1">
+                      <i class="fa-solid fa-circle-check"></i> <span id="txt-card4-fixed">Fixed in 4h</span>
+                    </div>
+                  </div>
+                  <div class="p-4 space-y-2">
+                    <h3 class="font-bold text-slate-900 text-sm leading-snug" id="txt-card4-title">Illegal Dumping Cleared & Sanitized</h3>
+                    <p class="text-xs text-slate-600 leading-relaxed" id="txt-card4-desc">Accumulated waste removed by municipal trucks and area disinfected with lime powder.</p>
+                    <div class="bg-indigo-50/70 rounded-xl p-2.5 border border-indigo-100/80">
+                      <p class="text-[11px] text-indigo-950 italic font-medium" id="txt-card4-quote">“Sanitation team cleared everything in 4 hours!” — Ward 3 Association</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="p-4 pt-0">
+                  <div class="pt-3 border-t border-slate-200/80 flex items-center justify-between text-[11px] text-slate-500">
+                    <span id="txt-card4-loc"><i class="fa-solid fa-location-dot text-rose-500 mr-1"></i> Ward 3 (Bus Terminal)</span>
+                    <span class="font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200" id="txt-card4-ver">Verified by AI Triage</span>
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
-          <i class="fa-solid fa-chevron-right text-slate-400 group-hover:text-slate-900 group-hover:translate-x-1 transition text-sm"></i>
-        </button>
+
+          <!-- SECTION 2: EASY 3-STEP GUIDE FOR LOW DIGITAL FAMILIARITY CITIZENS -->
+          <div class="bg-indigo-900 text-white p-6 sm:p-8 rounded-3xl border border-indigo-800 shadow-sm space-y-6">
+            <div>
+              <div class="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-300 uppercase tracking-wider mb-1">
+                <i class="fa-solid fa-hand-holding-heart"></i> <span id="txt-step-guide-tag">Simple & Accessible</span>
+              </div>
+              <h2 class="text-xl sm:text-2xl font-black text-white tracking-tight" id="txt-step-guide-title">How CivicResolve Works for Every Citizen</h2>
+              <p class="text-xs text-indigo-200 mt-1" id="txt-step-guide-sub">No complicated forms or tech skills required. Only 3 easy steps!</p>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <!-- Step 1 -->
+              <div class="bg-indigo-950/70 border border-indigo-700/60 p-4 rounded-2xl text-center space-y-2">
+                <div class="w-12 h-12 bg-amber-400 text-slate-950 font-black text-xl rounded-2xl flex items-center justify-center mx-auto shadow-md">
+                  1
+                </div>
+                <div class="font-bold text-sm text-white flex items-center justify-center gap-1.5" id="txt-step1-title">
+                  Snap Photo
+                </div>
+                <p class="text-xs text-indigo-200 leading-relaxed" id="txt-step1-desc">Take a photo of any broken road, waste, or leaking pipe on your phone.</p>
+              </div>
+
+              <!-- Step 2 -->
+              <div class="bg-indigo-950/70 border border-indigo-700/60 p-4 rounded-2xl text-center space-y-2">
+                <div class="w-12 h-12 bg-cyan-400 text-slate-950 font-black text-xl rounded-2xl flex items-center justify-center mx-auto shadow-md">
+                  2
+                </div>
+                <div class="font-bold text-sm text-white flex items-center justify-center gap-1.5" id="txt-step2-title">
+                  Auto Triage
+                </div>
+                <p class="text-xs text-indigo-200 leading-relaxed" id="txt-step2-desc">AI automatically tags the exact location and alerts municipal workers.</p>
+              </div>
+
+              <!-- Step 3 -->
+              <div class="bg-indigo-950/70 border border-indigo-700/60 p-4 rounded-2xl text-center space-y-2">
+                <div class="w-12 h-12 bg-emerald-400 text-slate-950 font-black text-xl rounded-2xl flex items-center justify-center mx-auto shadow-md">
+                  3
+                </div>
+                <div class="font-bold text-sm text-white flex items-center justify-center gap-1.5" id="txt-step3-title">
+                  Track & Fixed
+                </div>
+                <p class="text-xs text-indigo-200 leading-relaxed" id="txt-step3-desc">Receive live updates on your phone until the government fixes the problem!</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- SECTION 3: CITIZEN GUARANTEE & PRIVACY PLEDGE -->
+          <div class="bg-emerald-50 border border-emerald-200 rounded-3xl p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div class="p-3 bg-emerald-600 text-white rounded-2xl text-2xl flex-shrink-0">
+              <i class="fa-solid fa-shield-cat"></i>
+            </div>
+            <div>
+              <h3 class="font-bold text-emerald-950 text-base" id="txt-guarantee-title">Government Transparency & Security Guarantee</h3>
+              <p class="text-xs text-emerald-800 mt-1 leading-relaxed" id="txt-guarantee-desc">
+                Your complaint cannot be closed without verified photo evidence from staff and resident confirmation. All personal citizen data is kept strictly confidential under government privacy standards.
+              </p>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- RIGHT COLUMN (Lg: 5 cols): REPOSITIONED PORTAL ACCESS & LOGIN PANEL -->
+        <div class="lg:col-span-5 lg:sticky lg:top-24 space-y-6">
+          
+          <!-- REPOSITIONED PORTAL ACCESS CARD -->
+          <div class="bg-white p-6 sm:p-8 rounded-3xl border-2 border-indigo-200 shadow-xl space-y-6 relative overflow-hidden">
+            
+            <!-- Header -->
+            <div class="text-center space-y-2 border-b border-slate-100 pb-5">
+              <div class="inline-flex p-3 bg-indigo-50 rounded-2xl mb-1 border border-indigo-100">
+                <img src="logo.png" alt="CivicResolve Logo" class="h-14 w-auto object-contain">
+              </div>
+              <h2 class="text-2xl font-black text-slate-900 tracking-tight" id="txt-portal-title">PORTAL ACCESS</h2>
+              <p class="text-xs text-indigo-600 font-bold uppercase tracking-wider" id="txt-portal-sub">Select your portal to continue</p>
+            </div>
+
+            <!-- PORTAL BUTTONS -->
+            <div class="space-y-4">
+              <!-- Citizen Portal Button (PRIMARY) -->
+              <button onclick="showView('citizen-login-view')" class="w-full flex items-center justify-between p-4 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-2xl shadow-lg hover:shadow-indigo-500/25 transition transform active:scale-98 text-left group">
+                <div class="flex items-center gap-3.5">
+                  <div class="p-3 bg-white/20 rounded-xl text-white group-hover:scale-110 transition">
+                    <i class="fa-solid fa-user-check text-xl"></i>
+                  </div>
+                  <div>
+                    <div class="font-extrabold text-white text-base" id="txt-btn-citizen">Citizen Portal</div>
+                    <div class="text-xs text-indigo-100 font-medium" id="txt-btn-citizen-sub">Report road damage, garbage, leaks</div>
+                  </div>
+                </div>
+                <i class="fa-solid fa-arrow-right text-white group-hover:translate-x-1.5 transition text-base"></i>
+              </button>
+
+              <!-- Municipal Staff Login Button (SECONDARY) -->
+              <button onclick="showView('admin-login-view')" class="w-full flex items-center justify-between p-4 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl shadow-md transition text-left group border border-slate-800">
+                <div class="flex items-center gap-3.5">
+                  <div class="p-3 bg-slate-800 text-slate-300 rounded-xl group-hover:bg-slate-700 group-hover:text-white transition">
+                    <i class="fa-solid fa-shield-halved text-xl"></i>
+                  </div>
+                  <div>
+                    <div class="font-bold text-white text-sm" id="txt-btn-admin">Municipal Staff Login</div>
+                    <div class="text-xs text-slate-400 font-medium" id="txt-btn-admin-sub">Department dashboard & live map</div>
+                  </div>
+                </div>
+                <i class="fa-solid fa-chevron-right text-slate-400 group-hover:text-white group-hover:translate-x-1 transition text-sm"></i>
+              </button>
+            </div>
+
+            <!-- QUICK ACCESS ASSISTANCE BOX -->
+            <div class="bg-amber-50/80 border border-amber-200/80 p-4 rounded-2xl space-y-2 text-center">
+              <div class="text-xs font-bold text-amber-900 flex items-center justify-center gap-1.5" id="txt-assist-title">
+                <i class="fa-solid fa-circle-info text-amber-600"></i> Need Assistance?
+              </div>
+              <p class="text-xs text-amber-800 leading-normal" id="txt-assist-desc">
+                If you face any issue logging in, call our 24/7 Helpline at <b>1800-123-CIVIC</b> or request help at your nearest Ward Office.
+              </p>
+            </div>
+
+          </div>
+
+        </div>
+
       </div>
+
     </section>
 
     <!-- 2. PUBLIC / CITIZEN LOGIN & SIGN UP VIEW -->
-    <section id="citizen-login-view" class="hidden max-w-md mx-auto mt-8 bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-md">
-      <button onclick="showView('auth-select-view')" class="text-xs text-slate-500 hover:text-slate-800 mb-4 inline-flex items-center gap-1 font-medium">&larr; Back</button>
+    <section id="citizen-login-view" class="hidden max-w-md mx-auto mt-8 bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-xl">
+      <button onclick="showView('auth-select-view')" class="text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3.5 py-2 rounded-xl mb-6 inline-flex items-center gap-1.5 transition border border-indigo-200 cursor-pointer">
+        <i class="fa-solid fa-arrow-left"></i> Back to Government Showcase
+      </button>
       
       <!-- SIGN IN VIEW -->
       <div id="public-signin-box">
         <div class="text-center mb-6">
+          <div class="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[11px] font-bold border border-emerald-200 mb-3">
+            <i class="fa-solid fa-shield-halved"></i> Official Citizen Access
+          </div>
           <h2 class="text-2xl font-black text-slate-900 tracking-tight" id="txt-public-login-title">PUBLIC LOGIN</h2>
           <p class="text-xs text-indigo-600 font-semibold uppercase tracking-wider mt-1">Welcome to CivicConnect</p>
           <p class="text-xs text-slate-500 mt-1">Sign in with your mobile number & CAPTCHA verification.</p>
@@ -261,10 +542,17 @@
     </div>
 
     <!-- 3. ADMIN LOGIN VIEW -->
-    <section id="admin-login-view" class="hidden max-w-md mx-auto mt-10 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-      <button onclick="showView('auth-select-view')" class="text-xs text-slate-500 hover:text-slate-800 mb-4 inline-block">&larr; Back</button>
-      <h2 class="text-xl font-bold text-slate-900 mb-1" id="txt-staff-login-title">Municipal Staff Login</h2>
-      <p class="text-xs text-slate-500 mb-6" id="txt-staff-login-sub">Select your municipal ward and department.</p>
+    <section id="admin-login-view" class="hidden max-w-md mx-auto mt-10 bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-xl">
+      <button onclick="showView('auth-select-view')" class="text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3.5 py-2 rounded-xl mb-6 inline-flex items-center gap-1.5 transition border border-slate-300 cursor-pointer">
+        <i class="fa-solid fa-arrow-left"></i> Back to Government Showcase
+      </button>
+      <div class="text-center mb-6">
+        <div class="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-900 text-white rounded-full text-[11px] font-bold mb-3 shadow-sm">
+          <i class="fa-solid fa-user-shield text-amber-400"></i> Authorized Staff Portal
+        </div>
+        <h2 class="text-2xl font-black text-slate-900 tracking-tight" id="txt-staff-login-title">Municipal Staff Login</h2>
+        <p class="text-xs text-slate-500 mt-1" id="txt-staff-login-sub">Select your municipal ward and department.</p>
+      </div>
 
       <form onsubmit="handleAdminLogin(event)" class="space-y-4">
         <div>
@@ -591,7 +879,63 @@
         lblCoords: "Click coordinates or select report",
         nearbyIssuesTitle: "Nearby Issues (Duplicates/Clusters)",
         noCoordsText: "No coordinates pinned.",
-        nearbyPromptText: "Pin a location or select a ticket to search for duplicates in the area."
+        nearbyPromptText: "Pin a location or select a ticket to search for duplicates in the area.",
+        heroOfficialBadge: "Official Municipal Governance Portal",
+        statFixedLbl: "Issues Fixed",
+        statAvgLbl: "Avg Resolution",
+        statSatLbl: "Citizen Satisfaction",
+        statTrackLbl: "Live Tracking",
+        helplineTag: "24/7 Citizen Helpline",
+        helplineTitle: "Low Digital Familiarity?",
+        helplineDesc: "Call our toll-free municipal helpline anytime to register issues verbally or seek help.",
+        helplineBtn: "Call Toll-Free: 1800-123-CIVIC",
+        proofTag: "Proof of Action",
+        proofTitle: "Recent Problems Resolved by Government",
+        proofBadge: "Live Updates",
+        card1Dept: "Highways & Roads",
+        card1Fixed: "Fixed in 14h",
+        card1Title: "Major Pothole & Damaged Road Paved",
+        card1Desc: "Hazardous pothole causing heavy traffic slowdown repaired with fresh asphalt layering.",
+        card1Loc: "Ward 14 (Anna Nagar)",
+        card1Ver: "Verified by AI & Staff",
+        card1Quote: "“Road is super smooth now! Thank you municipal team!” — S. Kumar",
+        card2Dept: "Water Supply",
+        card2Fixed: "Fixed in 6h",
+        card2Title: "Main Pipeline Burst Repaired",
+        card2Desc: "High-pressure drinking water leakage sealed and full supply restored to 400 households.",
+        card2Loc: "Ward 8 (Sector 4)",
+        card2Ver: "Verified by Resident",
+        card2Quote: "“Water flow restored before morning! Great work.” — Lakshmi Ammal",
+        card3Dept: "Electrical Dept",
+        card3Fixed: "Fixed in 18h",
+        card3Title: "Dark Alley LED Streetlights Restored",
+        card3Desc: "Faulty transformer wire fixed and 8 new energy-efficient LED streetlamps installed for safety.",
+        card3Loc: "Ward 22 (Market Rd)",
+        card3Ver: "Verified by Staff",
+        card3Quote: "“Market street is bright and safe for women at night.” — Venkatesh",
+        card4Dept: "Solid Waste",
+        card4Fixed: "Fixed in 4h",
+        card4Title: "Illegal Dumping Cleared & Sanitized",
+        card4Desc: "Accumulated waste removed by municipal trucks and area disinfected with lime powder.",
+        card4Loc: "Ward 3 (Bus Terminal)",
+        card4Ver: "Verified by AI Triage",
+        card4Quote: "“Sanitation team cleared everything in 4 hours!” — Ward 3 Association",
+        stepGuideTag: "Simple & Accessible",
+        stepGuideTitle: "How CivicResolve Works for Every Citizen",
+        stepGuideSub: "No complicated forms or tech skills required. Only 3 easy steps!",
+        step1Title: "Snap Photo",
+        step1Desc: "Take a photo of any broken road, waste, or leaking pipe on your phone.",
+        step2Title: "Auto Triage",
+        step2Desc: "AI automatically tags the exact location and alerts municipal workers.",
+        step3Title: "Track & Fixed",
+        step3Desc: "Receive live updates on your phone until the government fixes the problem!",
+        guaranteeTitle: "Government Transparency & Security Guarantee",
+        guaranteeDesc: "Your complaint cannot be closed without verified photo evidence from staff and resident confirmation. All personal citizen data is kept strictly confidential under government privacy standards.",
+        portalTitle: "PORTAL ACCESS",
+        portalSub: "Select your portal to continue",
+        assistTitle: "Need Assistance?",
+        assistDesc: "If you face any issue logging in, call our 24/7 Helpline at 1800-123-CIVIC or request help at your nearest Ward Office.",
+        backShowcase: "Back to Government Showcase"
       },
       ta: {
         title: "மக்கள் சேவை",
@@ -649,7 +993,63 @@
         lblCoords: "வரைபடத்தில் கிளிக் செய்யவும் அல்லது புகாரைத் தேர்ந்தெடுக்கவும்",
         nearbyIssuesTitle: "அருகிலுள்ள புகார்கள் (நகல்கள்/தொகுப்புகள்)",
         noCoordsText: "வரைபடத்தில் இடம் குறிக்கப்படவில்லை.",
-        nearbyPromptText: "இப்பகுதியில் உள்ள நகல் புகார்களைக் கண்டறிய வரைபடத்தில் குறிக்கவும் அல்லது புகாரைத் தேர்ந்தெடுக்கவும்."
+        nearbyPromptText: "இப்பகுதியில் உள்ள நகல் புகார்களைக் கண்டறிய வரைபடத்தில் குறிக்கவும் அல்லது புகாரைத் தேர்ந்தெடுக்கவும்.",
+        heroOfficialBadge: "அரசு அங்கீகரிக்கப்பட்ட நகராட்சி தளம்",
+        statFixedLbl: "தீர்க்கப்பட்ட புகார்கள்",
+        statAvgLbl: "சராசரி தீர்வு நேரம்",
+        statSatLbl: "மக்களின் திருப்தி",
+        statTrackLbl: "நேரடி கண்காணிப்பு",
+        helplineTag: "24/7 மக்கள் உதவி மையம்",
+        helplineTitle: "தொழில்நுட்ப உதவி தேவையா?",
+        helplineDesc: "எங்கள் கட்டணமில்லா உதவி எண்ணை அழைத்து குரல் மூலம் உங்கள் புகாரை பதிவு செய்ய பெறலாம்.",
+        helplineBtn: "அழைக்கவும்: 1800-123-CIVIC",
+        proofTag: "செயல் சான்று",
+        proofTitle: "அரசாங்கத்தால் தீர்க்கப்பட்ட அண்மைப் பிரச்சனைகள்",
+        proofBadge: "நேரடி புதுப்பிப்பு",
+        card1Dept: "நெடுஞ்சாலைகள் & சாலைகள்",
+        card1Fixed: "14 மணி நேரத்தில் சரி செய்யப்பட்டது",
+        card1Title: "பெரிய சாலை பள்ளம் மற்றும் சேதம் சீரமைப்பு",
+        card1Desc: "போக்குவரத்தை பாதித்த சாலை பள்ளம் புதிய தார் போடப்பட்டு உடனடியாக சரி செய்யப்பட்டது.",
+        card1Loc: "வார்டு 14 (அண்ணா நகர்)",
+        card1Ver: "AI மற்றும் அதிகாரிகளால் சரிபார்க்கப்பட்டது",
+        card1Quote: "“சாலை இப்போது மிகவும் சீராக உள்ளது! நகராட்சிக்கு நன்றி!” — எஸ். குமார்",
+        card2Dept: "குடிநீர் வழங்கல்",
+        card2Fixed: "6 மணி நேரத்தில் சரி செய்யப்பட்டது",
+        card2Title: "முக்கிய குடிநீர் குழாய் உடைப்பு சீரமைப்பு",
+        card2Desc: "உயர் அழுத்த குடிநீர் கசிவு அடைக்கப்பட்டு 400 வீடுகளுக்கு உடனடியாக குடிநீர் விநியோகம் சீரமைக்கப்பட்டது.",
+        card2Loc: "வார்டு 8 (செக்டார் 4)",
+        card2Ver: "பொதுமக்களால் சரிபார்க்கப்பட்டது",
+        card2Quote: "“காலைக்கு முன்பே குடிநீர் விநியோகம் சீரானது! அற்புதம்.” — லட்சுமி அம்மாள்",
+        card3Dept: "மின்சார துறை",
+        card3Fixed: "18 மணி நேரத்தில் சரி செய்யப்பட்டது",
+        card3Title: "இருண்ட வீதியின் எல்.இ.டி மின்விளக்குகள் சீரமைப்பு",
+        card3Desc: "மின்மாற்றி கோளாறு சரி செய்யப்பட்டு 8 புதிய எல்.இ.டி தெருவிளக்குகள் பொருத்தப்பட்டன.",
+        card3Loc: "வார்டு 22 (மார்க்கெட் ரோடு)",
+        card3Ver: "அதிகாரிகளால் சரிபார்க்கப்பட்டது",
+        card3Quote: "“சந்தை தெரு இப்போது இரவு நேரத்தில் பெண்களுக்கு பாதுகாப்பாக உள்ளது.” — வெங்கடேஷ்",
+        card4Dept: "திடக்கழிவு மேலாண்மை",
+        card4Fixed: "4 மணி நேரத்தில் சரி செய்யப்பட்டது",
+        card4Title: "சட்டவிரோத குப்பைகள் அகற்றம் & கிருமிநாசினி தெளிப்பு",
+        card4Desc: "தேங்கிய கழிவுகள் நகராட்சி லாரிகள் மூலம் அகற்றப்பட்டு சுண்ணக்கம்பு பொடி தெளிக்கப்பட்டது.",
+        card4Loc: "வார்டு 3 (பேருந்து நிலையம்)",
+        card4Ver: "AI அமைப்பால் சரிபார்க்கப்பட்டது",
+        card4Quote: "“தூய்மைப் பணியாளர்கள் 4 மணி நேரத்தில் அனைத்தையும் அகற்றினர்!” — வார்டு 3 நலச்சங்கம்",
+        stepGuideTag: "எளிமையானது & எளிதில் பயன்படுத்தக்கூடியது",
+        stepGuideTitle: "ஒவ்வொரு குடிமகனுக்கும் CivicResolve எவ்வாறு செயல்படுகிறது",
+        stepGuideSub: "சிக்கலான படிவங்களோ தொழில்நுட்ப அறிவோ தேவையில்லை. 3 எளிய படிகள் மட்டுமே!",
+        step1Title: "புகைப்படம் எடுக்கவும்",
+        step1Desc: "உடைந்த சாலை, குப்பை அல்லது நீர் கசிவு போன்ற பிரச்சனைகளை படம் எடுக்கவும்.",
+        step2Title: "தானியங்கி ஒதுக்கீடு",
+        step2Desc: "AI துல்லியமான இடத்தைக் குறித்து நகராட்சி ஊழியர்களுக்கு உடனடியாக அறிவிக்கும்.",
+        step3Title: "கண்காணித்து தீர்வைப் பெறுங்கள்",
+        step3Desc: "அரசாங்கம் பிரச்சனையைச் சரிசெய்யும் வரை உங்கள் போனில் நேரடி தகவல்களைப் பெறுங்கள்!",
+        guaranteeTitle: "அரசாங்க வெளிப்படைத்தன்மை & பாதுகாப்பு உத்தரவாதம்",
+        guaranteeDesc: "அதிகாரிகளின் புகைப்படச் சான்று மற்றும் உங்கள் உறுதிப்படுத்தல் இன்றி புகார் மூடப்படாது. அனைத்து தனிப்பட்ட தகவல்களும் அரசு விதிகளின்படி பாதுகாப்பாக வைக்கப்படும்.",
+        portalTitle: "நுழைவுத் தளம்",
+        portalSub: "தொடர உங்கள் தளத்தைத் தேர்ந்தெடுக்கவும்",
+        assistTitle: "உதவி தேவையா?",
+        assistDesc: "உள்நுழைவதில் சிக்கல் இருந்தால், எங்கள் 24/7 உதவி எண் 1800-123-CIVIC ஐ அழைக்கவும் அல்லது வார்டு அலுவலகத்தை அணுகவும்.",
+        backShowcase: "அரசு தளம் செல்ல"
       },
       hi: {
         title: "नागरिक समाधान",
@@ -707,7 +1107,63 @@
         lblCoords: "निर्देशांक पर क्लिक करें या रिपोर्ट का चयन करें",
         nearbyIssuesTitle: "आस-पास की समस्याएं (डुप्लिकेट/समूह)",
         noCoordsText: "कोई निर्देशांक पिन नहीं किया गया है।",
-        nearbyPromptText: "क्षेत्र में डुप्लिकेट खोजने के लिए कोई स्थान पिन करें या टिकट का चयन करें।"
+        nearbyPromptText: "क्षेत्र में डुप्लिकेट खोजने के लिए कोई स्थान पिन करें या टिकट का चयन करें।",
+        heroOfficialBadge: "आधिकारिक नगर निगम शासन पोर्टल",
+        statFixedLbl: "हल की गई समस्याएं",
+        statAvgLbl: "औसत समाधान समय",
+        statSatLbl: "नागरिक संतुष्टि",
+        statTrackLbl: "लाइव ट्रैकिंग",
+        helplineTag: "24/7 नागरिक हेल्पलाइन",
+        helplineTitle: "तकनीकी सहायता चाहिए?",
+        helplineDesc: "हमारी टोल-फ्री हेल्पलाइन पर कॉल करके अपनी समस्या मौखिक रूप से दर्ज कराएं।",
+        helplineBtn: "टोल-फ्री कॉल करें: 1800-123-CIVIC",
+        proofTag: "कार्रवाई का प्रमाण",
+        proofTitle: "सरकार द्वारा हाल ही में हल की गई समस्याएं",
+        proofBadge: "लाइव अपडेट",
+        card1Dept: "राजमार्ग एवं सड़कें",
+        card1Fixed: "14 घंटे में ठीक",
+        card1Title: "मुख्य सड़क का गड्ढा एवं क्षतिग्रस्त मार्ग की मरम्मत",
+        card1Desc: "यातायात को बाधित करने वाले खतरनाक गड्ढे पर नई डामर परत बिछाकर मरम्मत की गई।",
+        card1Loc: "वार्ड 14 (अन्ना नगर)",
+        card1Ver: "एआई एवं अधिकारियों द्वारा सत्यापित",
+        card1Quote: "“सड़क अब बहुत चिकनी हो गई है! नगर निगम टीम को धन्यवाद!” — एस. कुमार",
+        card2Dept: "जल आपूर्ति",
+        card2Fixed: "6 घंटे में ठीक",
+        card2Title: "मुख्य पाइपलाइन रिसाव की मरम्मत",
+        card2Desc: "पीने के पानी के रिसाव को बंद कर 400 घरों में जलापूर्ति बहाल की गई।",
+        card2Loc: "वार्ड 8 (सेक्टर 4)",
+        card2Ver: "नागरिक द्वारा सत्यापित",
+        card2Quote: "“सुबह से पहले पानी की आपूर्ति बहाल हो गई! बेहतरीन काम।” — लक्ष्मी अम्माल",
+        card3Dept: "विद्युत विभाग",
+        card3Fixed: "18 घंटे में ठीक",
+        card3Title: "अंधेरी गली की स्ट्रीटलाइट्स की मरम्मत",
+        card3Desc: "खराब ट्रांसफार्मर तार को ठीक कर 8 नए एलईडी स्ट्रीटलैंप लगाए गए।",
+        card3Loc: "वार्ड 22 (मार्केट रोड)",
+        card3Ver: "कर्मचारियों द्वारा सत्यापित",
+        card3Quote: "“बाज़ार की सड़क अब रात में महिलाओं के लिए सुरक्षित है।” — वेंकटेश",
+        card4Dept: "ठोस कचरा प्रबंधन",
+        card4Fixed: "4 घंटे में ठीक",
+        card4Title: "कचरे की सफाई एवं कीटाणुशोधन",
+        card4Desc: "जमा कचरे को नगर निगम की गाड़ियों से हटाकर चूना पाउडर से कीटाणुरहित किया गया।",
+        card4Loc: "वार्ड 3 (बस स्टैंड)",
+        card4Ver: "एआई ट्रियाज द्वारा सत्यापित",
+        card4Quote: "“सफाई टीम ने 4 घंटे में सब साफ कर दिया!” — वार्ड 3 समिति",
+        stepGuideTag: "सरल एवं सुलभ",
+        stepGuideTitle: "CivicResolve हर नागरिक के लिए कैसे काम करता है",
+        stepGuideSub: "कोई जटिल फॉर्म या तकनीकी ज्ञान की आवश्यकता नहीं। केवल 3 आसान चरण!",
+        step1Title: "फोटो खींचें",
+        step1Desc: "टूटी सड़क, कचरा या पानी के रिसाव का अपने फोन से फोटो लें।",
+        step2Title: "स्वचालित असाइनमेंट",
+        step2Desc: "एआई स्वचालित रूप से स्थान को टैग करता है और कर्मचारियों को सूचित करता है।",
+        step3Title: "ट्रैक करें एवं समाधान पाएं",
+        step3Desc: "समस्या हल होने तक अपने फोन पर लाइव अपडेट प्राप्त करें!",
+        guaranteeTitle: "सरकारी पारदर्शिता एवं सुरक्षा गारंटी",
+        guaranteeDesc: "कर्मचारियों के फोटो साक्ष्य और आपकी पुष्टि के बिना शिकायत बंद नहीं की जा सकती। आपकी व्यक्तिगत जानकारी पूरी तरह सुरक्षित रहेगी।",
+        portalTitle: "पोर्टल एक्सेस",
+        portalSub: "आगे बढ़ने के लिए अपना पोर्टल चुनें",
+        assistTitle: "सहायता चाहिए?",
+        assistDesc: "यदि आपको लॉगिन में समस्या आ रही है, तो हमारी 24/7 हेल्पलाइन 1800-123-CIVIC पर कॉल करें।",
+        backShowcase: "सरकारी पोर्टल पर वापस जाएं"
       }
     };
 
@@ -1214,23 +1670,90 @@
       currentLang = lang;
       const dict = i18n[lang];
 
-      document.getElementById('nav-brand').innerText = dict.title;
-      document.getElementById('txt-app-title').innerText = dict.title;
-      document.getElementById('txt-app-subtitle').innerText = dict.subtitle;
-      document.getElementById('txt-btn-citizen').innerText = dict.btnCitizen;
-      document.getElementById('txt-btn-citizen-sub').innerText = dict.btnCitizenSub;
-      document.getElementById('txt-btn-admin').innerText = dict.btnAdmin;
-      document.getElementById('txt-btn-admin-sub').innerText = dict.btnAdminSub;
-      document.getElementById('txt-citizen-login-title').innerText = dict.citizenLogin;
-      document.getElementById('txt-tab-report').innerText = dict.tabReport;
-      document.getElementById('txt-tab-tracking').innerText = dict.tabTracking;
-      document.getElementById('txt-lbl-photo').innerText = dict.lblPhoto;
-      document.getElementById('txt-upload-tap').innerText = dict.uploadTap;
-      document.getElementById('txt-lbl-desc').innerText = dict.lblDesc;
-      document.getElementById('voice-text').innerText = dict.recordVoice;
-      document.getElementById('txt-lbl-loc').innerText = dict.lblLoc;
-      document.getElementById('txt-btn-submit').innerText = dict.btnSubmit;
-      document.getElementById('txt-offline').innerText = dict.offline;
+      const navBrand = document.getElementById('nav-brand');
+      if (navBrand) navBrand.innerText = dict.title;
+      const txtAppTitle = document.getElementById('txt-app-title');
+      if (txtAppTitle) txtAppTitle.innerText = dict.title;
+      const txtAppSubtitle = document.getElementById('txt-app-subtitle');
+      if (txtAppSubtitle) txtAppSubtitle.innerText = dict.subtitle;
+      const txtBtnCitizen = document.getElementById('txt-btn-citizen');
+      if (txtBtnCitizen) txtBtnCitizen.innerText = dict.btnCitizen;
+      const txtBtnCitizenSub = document.getElementById('txt-btn-citizen-sub');
+      if (txtBtnCitizenSub) txtBtnCitizenSub.innerText = dict.btnCitizenSub;
+      const txtBtnAdmin = document.getElementById('txt-btn-admin');
+      if (txtBtnAdmin) txtBtnAdmin.innerText = dict.btnAdmin;
+      const txtBtnAdminSub = document.getElementById('txt-btn-admin-sub');
+      if (txtBtnAdminSub) txtBtnAdminSub.innerText = dict.btnAdminSub;
+
+      // --- Landing Trust Showcase Multilingual Updates ---
+      const setT = (id, text) => {
+        const el = document.getElementById(id);
+        if (el && text !== undefined) el.innerText = text;
+      };
+
+      setT('txt-hero-official-badge', dict.heroOfficialBadge);
+      setT('txt-stat-fixed-lbl', dict.statFixedLbl);
+      setT('txt-stat-avg-lbl', dict.statAvgLbl);
+      setT('txt-stat-sat-lbl', dict.statSatLbl);
+      setT('txt-stat-track-lbl', dict.statTrackLbl);
+      setT('txt-helpline-tag', dict.helplineTag);
+      setT('txt-helpline-title', dict.helplineTitle);
+      setT('txt-helpline-desc', dict.helplineDesc);
+      setT('txt-helpline-btn', dict.helplineBtn);
+      setT('txt-proof-tag', dict.proofTag);
+      setT('txt-proof-title', dict.proofTitle);
+      setT('txt-proof-badge', dict.proofBadge);
+
+      setT('txt-card1-dept', dict.card1Dept);
+      setT('txt-card1-fixed', dict.card1Fixed);
+      setT('txt-card1-title', dict.card1Title);
+      setT('txt-card1-desc', dict.card1Desc);
+      setT('txt-card1-loc', dict.card1Loc);
+      setT('txt-card1-ver', dict.card1Ver);
+      setT('txt-card1-quote', dict.card1Quote);
+
+      setT('txt-card2-dept', dict.card2Dept);
+      setT('txt-card2-fixed', dict.card2Fixed);
+      setT('txt-card2-title', dict.card2Title);
+      setT('txt-card2-desc', dict.card2Desc);
+      setT('txt-card2-loc', dict.card2Loc);
+      setT('txt-card2-ver', dict.card2Ver);
+      setT('txt-card2-quote', dict.card2Quote);
+
+      setT('txt-card3-dept', dict.card3Dept);
+      setT('txt-card3-fixed', dict.card3Fixed);
+      setT('txt-card3-title', dict.card3Title);
+      setT('txt-card3-desc', dict.card3Desc);
+      setT('txt-card3-loc', dict.card3Loc);
+      setT('txt-card3-ver', dict.card3Ver);
+      setT('txt-card3-quote', dict.card3Quote);
+
+      setT('txt-card4-dept', dict.card4Dept);
+      setT('txt-card4-fixed', dict.card4Fixed);
+      setT('txt-card4-title', dict.card4Title);
+      setT('txt-card4-desc', dict.card4Desc);
+      setT('txt-card4-loc', dict.card4Loc);
+      setT('txt-card4-ver', dict.card4Ver);
+      setT('txt-card4-quote', dict.card4Quote);
+
+      setT('txt-step-guide-tag', dict.stepGuideTag);
+      setT('txt-step-guide-title', dict.stepGuideTitle);
+      setT('txt-step-guide-sub', dict.stepGuideSub);
+      setT('txt-step1-title', dict.step1Title);
+      setT('txt-step1-desc', dict.step1Desc);
+      setT('txt-step2-title', dict.step2Title);
+      setT('txt-step2-desc', dict.step2Desc);
+      setT('txt-step3-title', dict.step3Title);
+      setT('txt-step3-desc', dict.step3Desc);
+
+      setT('txt-guarantee-title', dict.guaranteeTitle);
+      setT('txt-guarantee-desc', dict.guaranteeDesc);
+      setT('txt-portal-title', dict.portalTitle);
+      setT('txt-portal-sub', dict.portalSub);
+      setT('txt-assist-title', dict.assistTitle);
+      setT('txt-assist-desc', dict.assistDesc);
+      setT('txt-back-citizen', dict.backShowcase);
+      setT('txt-back-admin', dict.backShowcase);
 
       // Staff Login translation
       const txtStaffLoginTitle = document.getElementById('txt-staff-login-title');
