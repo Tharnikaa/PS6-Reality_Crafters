@@ -586,8 +586,21 @@ function classifyReport(description) {
 }
 
 // ============================================================
-// REST API ENDPOINTS
+// API ROUTES
 // ============================================================
+
+app.get('/api/health', async (req, res) => {
+  if (!supabase) {
+    return res.status(200).json({ success: true, server: 'ok', database: 'disconnected (memory fallback)' });
+  }
+  try {
+    const { error } = await supabase.from('civic_reports').select('id').limit(1);
+    if (error) throw error;
+    res.status(200).json({ success: true, server: 'ok', database: 'connected' });
+  } catch (err) {
+    res.status(200).json({ success: false, server: 'ok', database: 'disconnected', error: err.message });
+  }
+});
 
 // ── GET /api/reports ─────────────────────────────────────────
 // Returns all reports, optionally filtered by department.
