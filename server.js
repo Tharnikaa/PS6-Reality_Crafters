@@ -983,19 +983,44 @@ app.post('/api/reports', authenticateToken, upload.single('image'), async (req, 
         .from('civic_reports')
         .insert([dbInsertPayload]);
 
-      if (error && error.message && error.message.includes('issue_id')) {
-        console.warn('Supabase table missing issue_id column. Retrying insert without issue_id...');
-        const sanitizedPayload = { ...dbInsertPayload };
-        delete sanitizedPayload.issue_id;
-        const retryResult = await supabase
-          .from('civic_reports')
-          .insert([sanitizedPayload]);
-        if (retryResult.error) throw retryResult.error;
-      } else if (error) {
-        throw error;
+      if (error) {
+        console.warn(`[DB] Insert failed. Error: ${error.message}`);
+        
+        // If the error is about a missing column, try a stripped-down basic insert
+        if (error.code === '42703' || error.message.includes('column') || error.message.includes('issue_id')) {
+          console.warn('[DB] Supabase table is likely missing new columns. Retrying basic insert...');
+          const basicPayload = {
+            id:               dbInsertPayload.id,
+            category:         dbInsertPayload.category,
+            department:       dbInsertPayload.department,
+            description:      dbInsertPayload.description,
+            location:         dbInsertPayload.location,
+            lat:              dbInsertPayload.lat,
+            lng:              dbInsertPayload.lng,
+            status:           dbInsertPayload.status,
+            severity:         dbInsertPayload.severity,
+            image_url:        dbInsertPayload.image_url,
+            reporter_phone:   dbInsertPayload.reporter_phone
+          };
+          
+          const retryResult = await supabase
+            .from('civic_reports')
+            .insert([basicPayload]);
+            
+          if (retryResult.error) {
+            console.error('[DB] Basic retry insert failed:', retryResult.error);
+            throw retryResult.error;
+          } else {
+            console.log('[DB] Basic insert succeeded!');
+          }
+        } else {
+          console.error('[DB] Supabase insert error details:', JSON.stringify(error, null, 2));
+          throw error;
+        }
       }
     } catch (err) {
-      console.warn('Failed to save report to Supabase, saving to memory fallback:', err.message);
+      console.error('[DB] FAILED TO SAVE TO SUPABASE. REASON:', err.message);
+      console.warn('[DB] Falling back to memory array. THIS DATA WILL BE LOST ON RESTART!');
       fallbackReports.unshift(formatReportRow(initialReport));
     }
   } else {
