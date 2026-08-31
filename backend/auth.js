@@ -27,13 +27,13 @@ async function authenticateToken(req, res, next) {
 
   if (!token) {
     console.warn('[AUTH] Missing token. Falling back to public citizen session.');
-    req.user = { id: 'public-citizen-session', phone: req.body.reporterPhone || '+91 9876543210' };
+    req.user = { id: 'public-citizen-session', phone: req.body?.reporterPhone || '+91 9876543210' };
     return next();
   }
 
   // Allow public citizen session tokens (mobile + CAPTCHA authenticated)
   if (!token || token === 'demo-jwt-token' || token.startsWith('captcha-session-token-') || token.startsWith('civic-token-') || !supabase) {
-    req.user = { id: token || 'public-citizen-session', phone: req.body.reporterPhone || '+91 9876543210' };
+    req.user = { id: token || 'public-citizen-session', phone: req.body?.reporterPhone || '+91 9876543210' };
     return next();
   }
 
@@ -45,12 +45,12 @@ async function authenticateToken(req, res, next) {
       return next();
     } else {
       // Public citizen session fallback
-      req.user = { id: token, phone: req.body.reporterPhone || '+91 9876543210' };
+      req.user = { id: token, phone: req.body?.reporterPhone || '+91 9876543210' };
       return next();
     }
   } catch (err) {
     console.warn(`[AUTH] Token verification fallback for citizen session: ${err.message}`);
-    req.user = { id: token, phone: req.body.reporterPhone || '+91 9876543210' };
+    req.user = { id: token, phone: req.body?.reporterPhone || '+91 9876543210' };
     return next();
   }
 }
