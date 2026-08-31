@@ -1,155 +1,46 @@
-# CivicResolve — Agent Guidelines & Repository Architecture
+# CivicResolve — Agent Guidelines & Memory System (`AGENTS.md`)
 
-Welcome to the **CivicResolve** repository (`PS6-Reality_Crafters`). This document defines architecture standards, pipeline specifications, coding rules, and development workflows for AI coding agents and human contributors working on this project.
-
----
-
-## 1. Project Overview
-
-**CivicResolve** is an intelligent, real-time civic grievance triage and resolution platform designed for municipal corporations. It ingests citizen reports (photos, descriptions, GPS coordinates), filters malicious/duplicate submissions via a multi-layer spam gate, analyzes complaints with multimodal AI (Google Gemini), groups near-duplicates into master issue clusters, dynamically computes urgency/priority scores, and routes tickets to municipal department queues.
+Welcome to the **CivicResolve** repository (`PS6-Reality_Crafters`). This document defines guidelines, memory systems, operational constraints, and workflow protocols for AI coding agents and human engineers.
 
 ---
 
-## 2. Technology Stack
+## 1. Persistent File-Based Memory System
 
-* **Backend Engine:** Node.js (CommonJS), Express.js (v5.x), Multer (in-memory + disk buffer)
-* **Database & Auth:** Supabase (PostgreSQL), Supabase SSR, Row-Level Security (RLS), Supabase Storage
-* **AI & Machine Learning:** Google Generative AI (`@google/generative-ai` / Gemini Multimodal Vision & Text)
-* **Visual & Perceptual Analysis:** pHash Hamming Distance, CLIP Embeddings, Sightengine Moderation
-* **Frontend:** Vanilla HTML5, JavaScript (ES6+), Modern Responsive CSS, FontAwesome Icons
-* **Testing:** Node.js Native Assertion Suite (`assert`)
+To maintain context, track feature implementation, record non-trivial decisions, and prevent regression across development sessions, all agents **must utilize and maintain** the following persistent memory files:
 
----
-
-## 3. Directory Structure
-
-```
-├── .agents/                    # Custom agent skills and tool configurations
-│   └── skills/
-│       ├── supabase/
-│       └── supabase-postgres-best-practices/
-├── backend/                    # Core backend pipelines and security
-│   ├── auth.js                 # Supabase JWT & citizen token verification
-│   ├── captchaService.js       # Google reCAPTCHA v3 verification
-│   ├── rateLimiter.js          # In-memory auth rate limiting
-│   └── pipeline/
-│       ├── spamGate.js         # 4-layer spam gate (device, sightengine, pHash, CLIP)
-│       └── spamDetection.js    # Backwards-compatible spam wrapper
-├── services/                   # Dedicated external service integrations
-│   ├── imageEmbeddingService.js# CLIP visual similarity & vector distance
-│   ├── imageHashService.js     # Perceptual image hashing (pHash)
-│   └── sightengineService.js   # Image content moderation
-├── public/                     # Frontend client assets
-│   ├── index.html              # Citizen & municipal staff portal
-│   ├── app.js                  # Frontend state management & map rendering
-│   └── uploads/                # Local uploads cache directory
-├── scripts/                    # Database seeding & utility tools
-│   ├── generate_50_complaints.js# Dynamic 50-complaint ingestion simulator
-│   ├── generate_full_supabase_seed.js # Supabase SQL seed generator
-│   └── test_upload_report.js   # Automated multipart report upload test
-├── tests/                      # Comprehensive unit test suites
-│   ├── categorization.test.js  # AI category & department routing tests
-│   ├── spamDetection.test.js   # Spam detection unit tests
-│   ├── spamGate.test.js        # Spam gate architecture tests
-│   ├── multiLayerSpam.test.js  # Behavioral & visual spam tests
-│   └── duplicatePriority.test.js # Duplicate merging & priority score tests
-├── server.js                   # Main Express server and REST API routes
-├── schema.sql                  # PostgreSQL database table definitions
-├── seed.sql                    # Initial sample data seed
-└── supabase_seed_50.sql        # 50+ complaint tickets seed for Supabase
-```
+| Memory Document | Primary Purpose & Usage Protocol |
+| :--- | :--- |
+| **[`system_project.md`](file:///c:/Users/JEYRAM/Desktop/Sharingan1/Sharingan/system_project.md)** | **Master Architectural Source of Truth:** Contains complete system overview, full technology stack, design rules, directory mappings, API contracts, naming conventions, and technical constraints. |
+| **[`progress.md`](file:///c:/Users/JEYRAM/Desktop/Sharingan1/Sharingan/progress.md)** | **Active Implementation Tracker:** Documents what was recently completed, what is incomplete/planned, expected problems/risks, and agent development phase. **Must be updated on every commit and milestone.** |
+| **[`remember.md`](file:///c:/Users/JEYRAM/Desktop/Sharingan1/Sharingan/remember.md)** | **Architectural Decision Record (ADR):** Preserves critical architectural decisions, reasoning, and long-term consequences. (Excludes trivial code styling choices). |
+| **[`task_manager.md`](file:///c:/Users/JEYRAM/Desktop/Sharingan1/Sharingan/task_manager.md)** | **Work State Matrix:** Organizes all development work into `Not Started`, `In Progress` / `Started`, `Completed`, and `Blocked`. |
+| **[`security.md`](file:///c:/Users/JEYRAM/Desktop/Sharingan1/Sharingan/security.md)** | **Credentials & Secrets Protocol:** Manages environment variable definitions, API service keys, staff authentication credentials, and secret rotation procedures. |
 
 ---
 
-## 4. Core Architecture & Request Pipeline
+## 2. Core Operational Rules for AI Agents
 
-Every incoming report (`POST /api/reports`) follows this sequence:
-
-```
-[Citizen Submission: Photo + GPS + Description]
-                     │
-                     ▼
-       1. Image Upload & Local Buffer
-     (Saved to public/uploads/ & Supabase Storage)
-                     │
-                     ▼
-       2. Multi-Layer Spam Gate
-     (Device Flooding -> Moderation -> pHash -> CLIP)
-                     │
-                     ▼
-       3. Multimodal AI Triage
-     (Gemini analyzes text + photo for category & hazard)
-                     │
-                     ▼
-       4. GPS Proximity & Duplicate Cluster Check
-     (100m radius check for same-category open tickets)
-                     │
-                     ▼
-       5. Dynamic Priority Calculation Engine
-     (Severity + Duplicate Count + School/Hospital Proximity + Arterial Road)
-                     │
-                     ▼
-       6. Database Persistence & Real-Time Sync
-     (PostgreSQL via Supabase or in-memory fallback)
-```
+1. **Check Memory Files First:** Before proposing architectural changes or refactoring existing pipelines, agents must review [`system_project.md`](file:///c:/Users/JEYRAM/Desktop/Sharingan1/Sharingan/system_project.md) and [`remember.md`](file:///c:/Users/JEYRAM/Desktop/Sharingan1/Sharingan/remember.md).
+2. **Update Progress On Every Commit:** Whenever code is modified, tests are added, or features are pushed, update [`progress.md`](file:///c:/Users/JEYRAM/Desktop/Sharingan1/Sharingan/progress.md) and [`task_manager.md`](file:///c:/Users/JEYRAM/Desktop/Sharingan1/Sharingan/task_manager.md) to reflect the new state.
+3. **Record Major Decisions in Remember.md:** When choosing a storage strategy, API structure, or validation threshold, log the decision and rationale in [`remember.md`](file:///c:/Users/JEYRAM/Desktop/Sharingan1/Sharingan/remember.md).
+4. **Defensive Body/Header Access:** Always use optional chaining (`req.body?.field`) in Express middlewares to prevent `TypeError: Cannot read properties of undefined`.
+5. **Local Storage First for Media:** Always persist uploaded media to [`public/uploads/`](file:///c:/Users/JEYRAM/Desktop/Sharingan1/Sharingan/public/uploads) to guarantee offline reliability and resilience against missing cloud buckets.
+6. **No Placeholder Fallbacks for Real Complaints:** Always map complaints without images to category-specific visual assets (`/road_resolved.jpg`, `/waste_resolved.jpg`, `/light_resolved.jpg`, `/water_resolved.jpg`).
+7. **Preserve Database Compatibility:** Keep field names aligned across Supabase PostgreSQL columns (`snake_case`) and frontend JavaScript state (`camelCase`) via `formatReportRow()` in [`server.js`](file:///c:/Users/JEYRAM/Desktop/Sharingan1/Sharingan/server.js).
+8. **Git & Secret Safety:** Strictly observe [`security.md`](file:///c:/Users/JEYRAM/Desktop/Sharingan1/Sharingan/security.md). Never commit `.env`, `.env.local`, or secret tokens to Git.
 
 ---
 
-## 5. Development & Testing Commands
+## 3. Essential Commands & Quick Reference
 
-### Running Locally
 ```bash
-# Start backend server on http://localhost:3000
+# Start backend development server (http://localhost:3000)
 npm start
+
+# Run all test suites
+npm test               # AI categorization unit tests
+npm run test:spam      # Spam detection unit tests
+npm run test:gate      # Spam gate architecture tests
+npm run test:multi     # Multi-layer visual & behavioral spam tests
+npm run test:duplicate # Duplicate merging & dynamic priority tests
 ```
-
-### Running Test Suites
-Always run and verify tests when modifying triage, spam, or scoring logic:
-```bash
-# Run AI categorization unit tests
-npm test
-
-# Run spam detection & gate tests
-npm run test:spam
-npm run test:gate
-
-# Run multi-layer visual & behavioral spam tests
-npm run test:multi
-
-# Run duplicate merging & priority calculation tests
-npm run test:duplicate
-```
-
----
-
-## 6. Environment Variables
-
-Store credentials in `.env` (safely ignored by `.gitignore`):
-```env
-# Supabase Database & Storage
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your-supabase-key
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-supabase-key
-
-# Google Gemini API Key (Multimodal AI Triage)
-GEMINI_API_KEY=your-gemini-api-key
-
-# Google reCAPTCHA v3 (Authentication)
-RECAPTCHA_SECRET_KEY=your-recaptcha-secret
-
-# Threshold Configuration
-DUPLICATE_RADIUS_METERS=100
-DUPLICATE_TIME_WINDOW_MINUTES=60
-PHASH_DISTANCE_THRESHOLD=5
-```
-
----
-
-## 7. Coding Rules & Best Practices for Agents
-
-1. **Defensive Body/Header Access:** Always use optional chaining (`req.body?.field`) in Express middlewares to prevent `TypeError: Cannot read properties of undefined`.
-2. **Local Storage First for Media:** When files are uploaded via Multer, always persist a copy to [`public/uploads/`](file:///c:/Users/JEYRAM/Desktop/Sharingan1/Sharingan/public/uploads) so images remain accessible even if cloud storage buckets are offline.
-3. **No Unsplash/Dummy Fallbacks for Real Complaints:** Always map complaints without images to category-specific visual assets (`/road_resolved.jpg`, `/waste_resolved.jpg`, `/light_resolved.jpg`, `/water_resolved.jpg`).
-4. **Preserve Database Compatibility:** Keep field names aligned across Supabase PostgreSQL columns (`snake_case`) and frontend JavaScript state (`camelCase`) via [`formatReportRow()`](file:///c:/Users/JEYRAM/Desktop/Sharingan1/Sharingan/server.js#L80).
-5. **Git Safety:** Never commit `.env`, `.env.local`, or sensitive credentials.
