@@ -724,7 +724,11 @@ async function handleReportSubmit(e) {
         severity: 3,
         imageUrl:
           reportPayload.image ||
-          "https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=500&q=80",
+          (isGarbage
+            ? "/waste_resolved.jpg"
+            : isLight
+              ? "/light_resolved.jpg"
+              : "/road_resolved.jpg"),
         timestamp: "Waiting to sync...",
         reporterPhone: reportPayload.reporterPhone,
       });

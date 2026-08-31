@@ -74,11 +74,33 @@ const knownFacilities = [
 ];
 
 // ============================================================
+// HELPER — Category Default Images
+// ============================================================
+function getDefaultCategoryImage(category) {
+  const cat = (category || '').toLowerCase();
+  if (cat.includes('garbage') || cat.includes('waste') || cat.includes('trash')) {
+    return '/waste_resolved.jpg';
+  }
+  if (cat.includes('light') || cat.includes('electric') || cat.includes('lamp')) {
+    return '/light_resolved.jpg';
+  }
+  if (cat.includes('water') || cat.includes('sewage') || cat.includes('drain') || cat.includes('leak')) {
+    return '/water_resolved.jpg';
+  }
+  return '/road_resolved.jpg';
+}
+
+// ============================================================
 // HELPER — Format a database row into the shape the
 //          frontend JavaScript expects.
 // ============================================================
 function formatReportRow(row) {
   if (!row) return null;
+  const rawImage = row.image_url || row.imageUrl;
+  const validImage = (rawImage && !rawImage.includes('1515162816999-a0c47dc192f7'))
+    ? rawImage
+    : getDefaultCategoryImage(row.category);
+
   return {
     id:               row.id,
     issue_id:         row.issue_id || null,
@@ -94,7 +116,7 @@ function formatReportRow(row) {
     severity:         row.severity,
     duplicatesCount:  row.duplicates_count || row.duplicatesCount || 1,
     duplicates_count: row.duplicates_count || row.duplicatesCount || 1,
-    imageUrl:         row.image_url || row.imageUrl,
+    imageUrl:         validImage,
     timestamp:        row.timestamp
                         ? new Date(row.timestamp).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
                         : 'Recently',
@@ -121,33 +143,55 @@ function formatReportRow(row) {
 }
 
 // ============================================================
-// IMAGE UPLOAD — Supabase Storage
-// Vercel's filesystem is read-only, so we upload images to
-// Supabase Storage and return a permanent public URL.
+// IMAGE UPLOAD — Local storage backup + Supabase Storage
 // ============================================================
 async function uploadImageToSupabase(buffer, originalname) {
-  if (!supabase) {
-    // No Supabase configured — return a placeholder image
-    return 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=500&q=80';
-  }
-
-  const ext      = path.extname(originalname) || '.jpg';
+  const ext = path.extname(originalname || 'photo.jpg') || '.jpg';
   const filename = `report-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
 
-  const { error } = await supabase.storage
-    .from('report-images')
-    .upload(filename, buffer, { contentType: 'image/jpeg', upsert: false });
-
-  if (error) {
-    console.error('Supabase Storage upload error:', error.message);
-    return 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=500&q=80';
+  // 1. Always save a copy to public/uploads/
+  let localUrl = null;
+  try {
+    const uploadDir = path.join(__dirname, 'public', 'uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    const localFilePath = path.join(uploadDir, filename);
+    fs.writeFileSync(localFilePath, buffer);
+    localUrl = `/uploads/${filename}`;
+  } catch (fsErr) {
+    console.warn('Could not save local copy of upload:', fsErr.message);
   }
 
-  const { data: publicData } = supabase.storage
-    .from('report-images')
-    .getPublicUrl(filename);
+  // 2. Try uploading to Supabase Storage
+  if (supabase) {
+    try {
+      const mimeType = ext.toLowerCase() === '.png' ? 'image/png' : 'image/jpeg';
+      const { error } = await supabase.storage
+        .from('report-images')
+        .upload(filename, buffer, { contentType: mimeType, upsert: true });
 
-  return publicData.publicUrl;
+      if (!error) {
+        const { data: publicData } = supabase.storage
+          .from('report-images')
+          .getPublicUrl(filename);
+        if (publicData && publicData.publicUrl) {
+          return publicData.publicUrl;
+        }
+      }
+    } catch (supErr) {
+      console.warn('Supabase Storage exception:', supErr.message);
+    }
+  }
+
+  // 3. Return local URL if available
+  if (localUrl) {
+    return localUrl;
+  }
+
+  // 4. Fallback to inline Base64 data URL
+  const mime = ext.toLowerCase() === '.png' ? 'image/png' : 'image/jpeg';
+  return `data:${mime};base64,${buffer.toString('base64')}`;
 }
 
 // ============================================================
@@ -846,7 +890,7 @@ app.post('/api/reports', authenticateToken, upload.single('image'), async (req, 
   const { description, location, lat, lng, reporterPhone } = req.body;
 
   // ── 1. Upload image ──────────────────────────────────────
-  let imageUrl = 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=500&q=80';
+  let imageUrl = null;
   let tempImagePath = null;
   if (req.file) {
     imageUrl = await uploadImageToSupabase(req.file.buffer, req.file.originalname);
@@ -857,8 +901,10 @@ app.post('/api/reports', authenticateToken, upload.single('image'), async (req, 
     } catch (e) {
       console.warn('Could not save temp file for image analysis:', e.message);
     }
-  } else if (req.body.imageUrl) {
+  } else if (req.body.imageUrl && !req.body.imageUrl.includes('1515162816999-a0c47dc192f7')) {
     imageUrl = req.body.imageUrl;
+  } else if (req.body.image && !req.body.image.includes('1515162816999-a0c47dc192f7')) {
+    imageUrl = req.body.image;
   }
 
   // ── 2. Run Multimodal AI Triage (Gemini LLM / Vision / Location-Aware) ──
@@ -877,6 +923,10 @@ app.post('/api/reports', authenticateToken, upload.single('image'), async (req, 
   const defaultClass = classifyReport(description);
   const category   = (aiTriage && aiTriage.category) ? aiTriage.category : defaultClass.category;
   const department = (aiTriage && aiTriage.department) ? aiTriage.department : defaultClass.department;
+
+  if (!imageUrl) {
+    imageUrl = getDefaultCategoryImage(category);
+  }
 
   const newLat      = parseFloat(lat) || 13.0827;
   const newLng      = parseFloat(lng) || 80.2707;
